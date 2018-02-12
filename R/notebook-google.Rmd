@@ -1,0 +1,335 @@
+---
+title: "Analyzing Google Search History"
+author: "Stephanie Lancz"
+output:
+  html_notebook: default
+  html_document: default
+date: "February 1, 2018"
+subtitle: "CME Group Foundation Business Analytics Lab"
+---
+
+<br>
+
+--------------
+
+## About this Notebook
+
+--------------
+
+<br>
+
+* The google search data on this notebook comes from a google account archive
+
+* The steps outlined here to collect and analyze the data may change at any time
+
+* Below are the steps to claim your google account data 
+
+
+<br>
+
+--------------
+
+## Analytics Toolkit: Require Packages
+
+--------------
+
+<br>
+
+* Package: tidyverse, lubridate, rvest, tm, wordcloud
+
+```{r, echo=TRUE}
+
+# Here we are checking if the package is installed
+if(!require(rvest, quietly = TRUE)) 
+  # If the package is not in the system then it will be install
+  install.packages(rvest, dependencies = TRUE, quietly = TRUE)
+  # Here we are loading the package
+  library(rvest, quietly = TRUE)
+
+if(!require(lubridate, quietly = TRUE)) 
+  install.packages(lubridate, dependencies = TRUE, quietly = TRUE)
+  library(lubridate, quietly = TRUE)
+
+if(!require(wordcloud, quietly = TRUE)) 
+  install.packages(wordcloud, dependencies = TRUE, quietly = TRUE)
+  library(wordcloud, quietly = TRUE)
+
+if(!require(tm, quietly = TRUE)) 
+  install.packages(tm, dependencies = TRUE, quietly = TRUE)
+  library(tm, quietly = TRUE)
+
+if(!require(tidyverse, quietly = TRUE))
+  install.packages(tidyverse, dependencies = TRUE, quietly = TRUE)
+  library(tidyverse, quietly = TRUE)
+
+```
+
+<br>
+
+--------------
+
+## Data Collection: Claming your Google Search Data
+
+--------------
+
+<br>
+
+#### 1) Sign into your google account, then Go to:
+* https://myaccount.google.com/privacy
+
+#### 2) Find the link to download your data archive or Go to: 
+* https://takeout.google.com/settings/takeout
+
+```{r, echo=FALSE}
+
+knitr::include_graphics('imgs/img01.png')
+
+```
+
+<br>
+
+#### 3) Select all Google products to create a complete archive of your data
+
+```{r, echo=FALSE}
+
+knitr::include_graphics('imgs/img02.png')
+
+```
+
+<br>
+
+#### 4) After selecting the products, choose the file type and max archive size to make sure that all your account data is archive
+
+```{r, echo=FALSE}
+
+knitr::include_graphics('imgs/img03.png')
+
+```
+
+<br>
+
+--------------
+
+## Data Preparation: Extracting Google Search Information
+
+--------------
+
+<br>
+
+### Locate the Google archive, then find the search data. For this case, it is an html file located in "My Activity" folder" then find the "Search" folder and the html file "MyActivity.html" should be there:
+
+* Takeout -> My Activity -> Search -> MyActivity.html 
+
+### Using the rvest package we can read the html document that contains the related google search data
+
+```{r}
+
+doc <- "takeout-20180131T030813z-001/Takeout/My Activity/Search/MyActivity.html"
+search_archive <- read_html(doc)
+
+```
+
+<br>
+
+--------------
+
+### Laveraging regular expression we can search the html document to extract:
+
+<br>
+
+#### Extract Search Time
+```{r}
+
+date_search <- search_archive %>% 
+  html_nodes(xpath = '//div[@class="mdl-grid"]/div/div') %>% 
+  str_extract(pattern = "(?<=<br>)(.*)(?<=PM|AM)") %>%
+  mdy_hms()
+
+```
+
+<br>
+
+#### Extract Search Text
+```{r}
+
+text_search <- search_archive %>% 
+  html_nodes(xpath = '//div[@class="mdl-grid"]/div/div') %>%
+  str_extract(pattern = '(?<=<a)(.*)(?=</a>)') %>% 
+  str_extract(pattern = '(?<=\">)(.*)')
+
+```
+
+<br>
+
+#### Extract Search Type
+```{r}
+
+type_search <- search_archive %>% 
+  html_nodes(xpath = '//div[@class="mdl-grid"]/div/div') %>% 
+  str_extract(pattern = "(?<=mdl-typography--body-1\">)(.*)(?=<a)") %>% 
+  str_extract(pattern = "(\\w+)(?=\\s)")
+
+```
+
+<br>
+
+#### Create a data frame using the data extracted from the html file
+```{r}
+
+search_data <- tibble(timestamp = date_search,
+                      date = as_date(date_search),
+                      year = year(date_search),
+                      month = month(date_search, label = TRUE),
+                      day = weekdays(date_search),
+                      hour = hour(date_search),
+                      type = type_search,
+                      search = text_search)
+
+search_data$day <- factor(search_data$day, 
+                          levels = c("Sunday", "Monday", "Tuesday",
+                                     "Wednesday","Thursday", "Friday",
+                                     "Saturday"))
+
+search_data <- na.omit(search_data)
+
+head(search_data)
+
+```
+
+<br>
+
+--------------
+
+## Data Analysis: Visualizing Google Searches
+
+--------------
+
+<br>
+
+#### To get an overall idea of the search volume, we can plot searches by year 
+
+```{r}
+
+p <- ggplot(search_data, aes(year))
+p + geom_bar()
+
+```
+
+<br>
+
+#### After determine the years with the largest search volume we can plot monthly searches
+```{r}
+
+monthly <- search_data[(search_data$year > 2014 & search_data$year< 2018), ]
+
+ggplot(monthly) + geom_bar(aes(x = month, group = year)) +
+  theme(axis.text.x = element_text(angle=90)) +
+  facet_grid(.~year, scales="free")
+
+```
+
+<br>
+
+#### Another interesting metrict is searches by Hour
+```{r}
+
+p <- ggplot(search_data, aes(hour))
+p + geom_bar()
+
+```
+
+<br>
+
+#### We can also plot the search data by day of the week to determine day are the most active
+```{r}
+
+p <- ggplot(search_data, aes(day))
+p + geom_bar()
+
+```
+
+<br>
+
+#### We can take it an step further and group search time with day of the week. 
+```{r}
+
+ggplot(search_data) + 
+  geom_bar(aes(x = hour, group = day) ) +
+  facet_grid(.~day, scales = "free")
+
+```
+
+<br>
+
+#### We can group the search data by year and day of the week, to visualize the overall trend 
+```{r}
+
+wkday <- group_by(search_data, year, day) %>% summarize(count = n())
+p <- ggplot(wkday, aes(day, count, fill = year)) 
+p + geom_bar(stat = "identity") + labs(x = "", y = "Search Volume")
+
+```
+
+<br>
+
+--------------
+
+## Reporting: A wordcloud from Google Search Data
+
+--------------
+
+<br>
+
+#### First we need to extract the text and clean it using regular expressions
+```{r}
+
+search <- tolower(search_data$search)
+search <- iconv(search, "ASCII", "UTF-8", " ")
+search <- gsub('(http|https)\\S+\\s*|(#|@)\\S+\\s*|\\n|\\"', " ", search)
+search <- gsub("(.*.)\\.com(.*.)\\S+\\s|[^[:alnum:]]", " ", search)
+search <- trimws(search)
+
+```
+
+<br>
+
+#### After cleaning the text we can create a Text Corpus (a large and structured set of texts) and remove some words 
+```{r}
+
+search_corpus <-  Corpus(VectorSource(search))
+search_corpus <- tm_map(search_corpus, content_transformer(removePunctuation))
+search_corpus <- tm_map(search_corpus, content_transformer(removeNumbers))
+stopwords <- c(stopwords("english"), "chrome", "chicago", "jlroo", "google")
+search_corpus <- tm_map(search_corpus, removeWords, stopwords)
+
+```
+
+<br>
+
+```{r}
+
+search_tdm <- TermDocumentMatrix(search_corpus)
+search_matrix <- as.matrix(search_tdm)
+
+```
+
+
+<br>
+
+#### Using the Term Document matrix we can create a data frame with the words and its related frequencies 
+```{r}
+
+v <- sort(rowSums(search_matrix), decreasing = TRUE)
+tw_names <- names(v)
+d <- data.frame(word = tw_names, freq = v)
+
+```
+
+<br>
+
+#### Set a threshold for the min frequency of the words to display as well as max frequency
+```{r}
+
+wordcloud(d$word, d$freq, min.freq = 50, scale = c(3 , 0.5), max.words = 200)
+
+```

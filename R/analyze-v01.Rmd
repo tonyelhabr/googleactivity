@@ -1,0 +1,198 @@
+---
+title: "Analysis of Personal Google Activity"
+author: ""
+date: ""
+---
+
+```{r}
+library("dplyr")
+library("stringr")
+library("rvest")
+library("lubridate")
+library("ggplot2")
+```
+
+## Analysis
+
+### Import
+
+```{r}
+doc <- "data-raw/MyActivity (1).html"
+search_archive <- xml2::read_html(doc)
+```
+
+### Clean
+
+```{r}
+# Extract search time.
+date_search <-
+  search_archive %>%
+  html_nodes(xpath = '//div[@class="mdl-grid"]/div/div') %>%
+  str_extract(pattern = "(?<=<br>)(.*)(?<=PM|AM)") %>%
+  mdy_hms()
+
+# Extract search text.
+text_search <-
+  search_archive %>%
+  html_nodes(xpath = '//div[@class="mdl-grid"]/div/div') %>%
+  str_extract(pattern = '(?<=<a)(.*)(?=</a>)') %>%
+  str_extract(pattern = '(?<=\">)(.*)')
+
+# Extract search type.
+type_search <-
+  search_archive %>% 
+  html_nodes(xpath = '//div[@class="mdl-grid"]/div/div') %>% 
+  str_extract(pattern = "(?<=mdl-typography--body-1\">)(.*)(?=<a)") %>% 
+  str_extract(pattern = "(\\w+)(?=\\s)")
+
+# Use `lubridate::wday()` here instead of `weekdays()` and subsequent coerction to factors.
+# Adding a `name` column for coloring purposes later.
+data <-
+  tibble(
+    name = "Tony",
+    timestamp = date_search,
+    date = lubridate::as_date(date_search),
+    year = lubridate::year(date_search) %>% as.integer(),
+    month = lubridate::month(date_search, label = TRUE),
+    day = lubridate::wday(date_search, label = TRUE),
+    hour = lubridate::hour(date_search),
+    type = type_search,
+    search = text_search
+  )
+
+```
+
+
+```{r}
+data %>% count(year, sort = TRUE)
+data <- data %>% filter(!is.na(year))
+```
+
+### Visualize
+
+Some very basic EDA...
+
+```{r}
+data %>% 
+  ggplot(aes(x = year)) +
+  geom_bar()
+data %>% filter(is.na(year))
+
+data %>% 
+  ggplot(aes(x = month)) + 
+  geom_bar(aes(group = year)) +
+  theme(axis.text.x = element_text(angle = 90)) +
+  facet_wrap( ~ year, scales = "free")
+```
+
+Now, getting a bit more specific.
+
+```{r}
+compute_elapsed_time <- function(date_start, date_end, type) {
+  if (type == "years" | type == "months") {
+    date_start <- as.POSIXlt(date_start)
+    date_end <- as.POSIXlt(date_end)
+    if (type == "years") {
+      out <- (date_end$year - date_start$year) - 1
+    } else if (type == "months") {
+      out <-
+        12 * (date_end$year - date_start$year) + (date_end$mon - date_start$mon) - 1
+    }
+  } else if (type == "days" | type == "hours") {
+    out <-
+      (difftime(date_end, date_start, units = type) - 1) %>%
+      round(0) %>%
+      as.numeric()
+  }
+  out
+}
+
+compute_timefilter <-
+  function(data, colnames_group = "name") {
+    data_proc <-
+      data %>%
+      group_by(!!!rlang::syms(colnames_group)) %>%
+      arrange(timestamp) %>%
+      mutate(date_start = first(timestamp),
+             date_end = last(timestamp)) %>%
+      slice(1) %>%
+      ungroup() %>%
+      select(name, date_start, date_end) %>%
+      mutate(
+        yyyy_elapsed = compute_elapsed_time(date_start, date_end, "years"),
+        mm_elapsed = compute_elapsed_time(date_start, date_end, "months"),
+        dd_elapsed = compute_elapsed_time(date_start, date_end, "days"),
+        hh_elapsed = compute_elapsed_time(date_start, date_end, "hours")
+      )
+    out <-
+      list(
+        data = data_proc,
+        date_start = max(data_proc$date_start),
+        date_end = min(data_proc$date_end)
+      )
+    out
+  }
+```
+
+```{r}
+data_timefilter <- compute_timefilter(data)
+```
+
+
+
+```{r}
+colors_te <- "maroon"
+add_viz_bytime_elements <-
+  function(viz,
+           geom = c("bar", "hist"),
+           colors = NULL,
+           lab_subtitle = NULL) {
+    geom <- match.arg(geom)
+    viz_labs <-
+      labs(
+        x = NULL,
+        y = NULL,
+        title = "Count Over Time",
+        subtitle = lab_subtitle
+      )
+    viz_theme <-
+      temisc::theme_te_b_facet() +
+      theme(panel.grid.major.x = element_blank()) +
+      # theme(legend.position = "bottom", legend.title = element_blank())
+      theme(legend.position = "none")
+
+    if (geom == "bar") {
+      viz <-
+        viz +
+        geom_bar(aes(y = ..count.., fill = name))
+    } else if (geom == "hist") {
+      viz <-
+        viz +
+        geom_histogram(aes(y = ..count.., fill = name), bins = 30)
+    }
+    viz <-
+      viz +
+      # scale_fill_manual(values = colors) +
+      facet_wrap(~ name, ncol = 1, strip.position = "right") +
+      viz_labs +
+      viz_theme
+    viz
+  }
+```
+
+
+```{r}
+lab_subtitle_all <-
+  paste0(
+    "From ",
+    strftime(data_timefilter$date_start, "%Y-%m-%d"),
+    " to ",
+    strftime(data_timefilter$date_end, "%Y-%m-%d")
+  )
+
+viz_bytime_all <-
+  search_archive %>%
+  ggplot(aes(x = timestamp)) %>%
+  add_viz_bytime_elements(geom = "hist", colors = colors_te, lab_subtitle = "By Year")
+```
+
