@@ -805,7 +805,8 @@ perhaps I could slice the data into 12 month intervals. Another approach worth e
 would compile it into groups of years corresponding to "phases" in my
 schooling and career.)
 
-```{r model_lda, eval = FALSE}
+```{r model_lda}
+# {r model_lda, eval = FALSE}
 lda_k <- 9
 seed <- 42
 model_lda <- topicmodels::LDA(data_dtm, k = lda_k, control = list(seed = seed))
@@ -816,7 +817,8 @@ lda_k <- 9
 model_lda <- stm::stm(data_dfm, K = lda_k, verbose = FALSE, init.type = "Spectral")
 ```
 
-```{r model_lda_io, echo = FALSE}
+```{r model_lda_io, eval = FALSE}
+# {r model_lda_io, echo = FALSE}
 # saveRDS(model_lda, file.path("data", "model_stm-k9-yyyy-tony.rds"))
 # model_lda <- readRDS(file.path("data", "model_stm-k9-yyyy-tony.rds"))
 # saveRDS(model_lda, file.path("data", "model_lda-k9-yyyy-tony.rds"))
