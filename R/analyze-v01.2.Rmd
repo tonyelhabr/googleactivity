@@ -100,7 +100,7 @@ library("rvest")
 library("lubridate")
 library("ggplot2")
 library("tidytext")
-library("stm")
+library("topicmodels")
 # devtools::install_github("tonyelhabr/temisc")
 library("temisc") # Personal package.
 ```
