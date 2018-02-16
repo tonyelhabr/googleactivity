@@ -5,12 +5,25 @@ date: ""
 output:
   html_document:
     toc: false
-    fig_width: 8
-    fig_height: 8
 ---
 
 ```{r setup, include = FALSE}
 knitr::opts_knit$set(root.dir = rprojroot::find_rstudio_root_file())
+knitr::opts_chunk$set(
+  echo = TRUE,
+  cache = FALSE,
+  results = "markdown",
+  fig.align = "center",
+  fig.show = "asis",
+  fig.width = 6,
+  fig.height = 6,
+  # out.width = 6,
+  # out.height = 6,
+  warning = FALSE,
+  message = FALSE
+)
+
+  
 ```
 
 While brainstorming about cool ways to practice text mining with R
@@ -34,8 +47,11 @@ can be downloaded from GitHub and re-used for one's own analysis), I explore
 different techniques for visualizing and understanding my data.
 I do my best to implement methods that are generic and could be applied to any
 kind of similar analysis, irregardless of the topic.
-Much of my code is guided by the work of others, so I give
-provide references for my inspiration where appropriate.
+Much of my code is guided by the work of others, especially that of
+David Robinson and Julia Silge, who have written an amazingly helpful book
+on text analysis--
+[_Tidy Text Mining with R_ book](https://www.tidytextmining.com/),
+I provide references for my inspiration where appropriate.
 
 ## Setup
 
@@ -99,7 +115,7 @@ I don't deviate much from
 for extracting data elements
 from the .html file
 
-```{r ipmort_and_clean_data}
+```{r import_and_clean_data, eval = FALSE}
 # Reference:
 # + https://rstudio-pubs-static.s3.amazonaws.com/355045_90b7464be9b4437393670340ad67c310.html#
 
@@ -151,10 +167,22 @@ data <-
 
 Notably, there are some rows that did not get parsed correctly. I decide to exclude
 them from the rest of the analysis.
+Also, my first searches come at the end of 2010, and my most recent ones
+(i.e. the ones just before I downloaded my data) come in the first month or so of 2018.
+To make the aspect of my analysis that deal with years a bit "cleaner", I'll truncate
+these ends so that my data spans the years 2011 through 2017.
 
-```{r filter_data_for_na}
+```{r filter_data, eval = FALSE}
 data %>% count(yyyy, sort = TRUE)
 data <- data %>% filter(!is.na(yyyy))
+data <- data %>% filter(!(yyyy %in% c(2010, 2018)))
+```
+
+
+```{r data_io, echo = FALSE}
+filepath_data <- "data/data-tony-cleaned.rds"
+# saveRDS(data, file = filepath_data)
+data <- readRDS(filepath_data)
 ```
 
 ## Analysis
@@ -163,11 +191,12 @@ data <- data %>% filter(!is.na(yyyy))
 
 Next, it's time to start doing some basic exploratory data analysis (EDA).
 Given the temporal nature of the data, an easy EDA approach to implement
-is visualization across different time periods. To save myself some effort
-(or, as I like to see it, make my code more efficient), I create a 
-visualization "helper" function. Notably, the `geom` to use is a parameter to this function.
-Through experimentation, I found that `ggplot2::geom_bar()` and `ggplot2::geom_hist()` seem
-to work better with different temporal periods.
+is visualization across different time periods. To save some effort
+(or, as I like to see it, make my code more efficient), we cab create a 
+helper function. (Notably, the `geom` to use is a parameter to this function.
+Through experimentation, I found that `ggplot2::geom_bar()` seems
+to work best with most temporal periods, with the exception of plotting `Date` variables,
+where `ggplot2::geom_hist()` seems more appropriate.)
 
 ```{r visualize_time_func}
 # Reference:
@@ -184,11 +213,11 @@ visualize_time <-
       labs(
         x = NULL,
         y = NULL,
-        title = "Count Over Time",
+        title = "Count Of Searches",
         subtitle = lab_subtitle
       )
     viz_theme <-
-      temisc::theme_te_b_facet() +
+      temisc::theme_te_a() +
       theme(panel.grid.major.x = element_blank()) +
       theme(legend.position = "none")
 
@@ -196,11 +225,12 @@ visualize_time <-
     if (geom == "bar") {
       viz <-
         viz +
-        geom_bar(aes_string(y = "..count.."), fill = color)
+        geom_bar(aes(y = ..count.., alpha = ..count..), fill = color) +
+        scale_alpha(range = c(0.5, 1))
     } else if (geom == "hist") {
       viz <-
         viz +
-        geom_histogram(aes_string(y = "..count.."), fill = color, bins = 30)
+        geom_histogram(aes(y = ..count..), fill = color, bins = 30)
     }
 
     viz <-
@@ -227,7 +257,7 @@ viz_time_yyyy <-
 
 The same pattern can be repeated for `timestamp`, `yyyy`, `mm`, `wd`, and `hh`.
 
-```{r visualize_time_usage, include = FALSE}
+```{r visualize_time_usage, echo = FALSE}
 lab_subtitle_all <-
   paste0(
     "From ",
@@ -244,7 +274,7 @@ viz_time_all <-
     color = params$color_main,
     lab_subtitle = lab_subtitle_all
   )
-
+viz_time_all
 # NOTE: Could probably use `purrr::pmap()` for the following.
 viz_time_yyyy <-
   visualize_time(
@@ -254,7 +284,7 @@ viz_time_yyyy <-
     color = params$color_main,
     lab_subtitle = "By Year"
   )
-
+viz_time_yyyy 
 viz_time_mm <-
   visualize_time(
     data = data,
@@ -263,7 +293,7 @@ viz_time_mm <-
     color = params$color_main,
     lab_subtitle = "By Month"
   )
-
+viz_time_mm
 viz_time_wd <-
   visualize_time(
     data = data,
@@ -272,7 +302,7 @@ viz_time_wd <-
     color = params$color_main,
     lab_subtitle = "By Day of Week"
   )
-
+viz_time_wd
 viz_time_hh <-
   visualize_time(
     data = data,
@@ -281,20 +311,24 @@ viz_time_hh <-
     color = params$color_main,
     lab_subtitle = "By Hour"
   )
-```
-
-```{r visualize_time_show, echo = FALSE}
-viz_time_all
-viz_time_yyyy 
-viz_time_mm
-viz_time_wd
 viz_time_hh
 ```
 
-Of course, other `geom`s can be used to visualize the data in other interesting ways.
-For instance, I could create a violin plot for the by-hour counts.
+I can make a couple of interesting observations about my data.
+
++ It's evident that I've googled stuff more and more frequently over the years.
++ It seems like my most active months correspond with typical American 
+high school/college breaks--winter break occurs during December/January, 
+spring break occurs in March, and the end of summer break occurs in August.
++ My relatively high activity on Saturdays and Sundays (compared to the rest of the days
+of the week) indicate that I like to spend my "breaks" of weekly school/work on the Internet.
++ Regarding my hour-to-hour activity, mine seems relatively even throughout the day. 
+I think if you compared my by-hour activity to others, mine would stand out as abnormally consistent.
+
 
 ```{r viz_time_unused, include = FALSE, eval = FALSE}
+# Of course, other `geom`s can be used to visualize the data in other interesting ways.
+# For instance, I could create a violin plot for the by-hour counts.
 # Reference:
 # + https://buzzfeednews.github.io/2018-01-trump-twitter-wars/
 viz_time_hh_2 <-
@@ -314,10 +348,10 @@ viz_time_hh_2 <-
   ) +
   labs(x = NULL, y = NULL) +
   labs(title = "Count Over Time", lab_subtitle = "By Time of Day") +
-  temisc::theme_te_b_dx() +
+  temisc::theme_te_a_dx() +
   theme(legend.position = "none", panel.grid = element_blank()) +
   coord_flip()
-
+viz_time_hh_2
 # Reference:
 # + https://rstudio-pubs-static.s3.amazonaws.com/355045_90b7464be9b4437393670340ad67c310.html#
 viz_time_hh_wd <-
@@ -328,9 +362,9 @@ viz_time_hh_wd <-
   facet_wrap( ~ wd, scales = "free") +
   labs(x = NULL, y = NULL) +
   labs(title = "Count Over Time", lab_subtitle = "By Hour of Day and Time of Day") +
-  temisc::theme_te_b_facet_dx() +
+  temisc::theme_te_a_facet_dx() +
   theme(legend.position = "none", panel.grid = element_blank())
-
+viz_time_hh_wd
 # Reference:
 # + https://rstudio-pubs-static.s3.amazonaws.com/355045_90b7464be9b4437393670340ad67c310.html#
 viz_time_wd_yyyy <-
@@ -341,14 +375,14 @@ viz_time_wd_yyyy <-
   facet_wrap(~name, scales = "free") +
   labs(x = NULL, y = NULL) +
   labs(title = "Count Over Time", lab_subtitle = "By Day of Week and Year") +
-  temisc::theme_te_b_facet_dx() +
+  temisc::theme_te_a_facet_dx() +
   theme(legend.position = "bottom", panel.grid = element_blank())
-
+viz_time_wd_yyyy
 ```
 
 ### Word Frequencies
 
-Now I can "tokenize" the search text into n-grams. I'll parse each
+Now we'll "tokenize" the search text into n-grams. We'll parse each
 search query into unigrams and bigrams.
 
 ```{r ngrams}
@@ -356,6 +390,7 @@ search query into unigrams and bigrams.
 # + https://rstudio-pubs-static.s3.amazonaws.com/355045_90b7464be9b4437393670340ad67c310.html#
 rgx_patt <- '(http|https)\\S+\\s*|(#|@)\\S+\\s*|\\n|\\"|(.*.)\\.com(.*.)\\S+\\s|[^[:alnum:]]'
 rgx_repl <- " "
+rgx_custom_ignore <- "google|search"
 
 # References:
 # + https://www.tidytextmining.com/
@@ -367,6 +402,7 @@ unigrams <-
   mutate(text = str_replace_all(text, rgx_patt, rgx_repl)) %>% 
   tidytext::unnest_tokens(word, text) %>% 
   anti_join(stop_words, by = "word") %>% 
+  filter(!str_detect(word, rgx_custom_ignore)) %>% 
   filter(str_detect(word, "[a-z]"))
 unigrams %>% select(word) %>% count(word, sort = TRUE)
 
@@ -380,12 +416,15 @@ bigrams <-
   tidyr::separate(word, into = c("word1", "word2"), sep = " ", remove = FALSE) %>% 
   anti_join(stop_words, by = c("word1" = "word")) %>% 
   anti_join(stop_words, by = c("word2" = "word")) %>% 
+  filter(!str_detect(word1, rgx_custom_ignore)) %>% 
+  filter(!str_detect(word2, rgx_custom_ignore)) %>% 
   filter(str_detect(word1, "[a-z]")) %>% 
   filter(str_detect(word2, "[a-z]"))
 bigrams %>% select(word) %>% count(word, sort = TRUE)
 ```
 
-With the data parsed into tokens, we can visualize counts of individual tokens.
+With the data parsed into tokens, we can visualize counts of 
+individual n-grams.
 
 ```{r viz_ngram_cnts}
 # Reference:
@@ -398,14 +437,14 @@ visualize_cnts <- function(data, color = "grey50", num_top = 20) {
     ggplot(aes(x = word, y = n)) +
     ggalt::geom_lollipop(size = 2, point.size = 4, color = color) +
     coord_flip() +
-    temisc::theme_te_b() +
+    temisc::theme_te_a() +
     labs(x = NULL, y = NULL) +
-    labs(title = "Count of Words") +
+    labs(title = "Most Common Words") +
     theme(legend.position = "none") +
     theme(panel.grid.major.y = element_blank())
 }
 
-num_top_cnt <- 20
+num_top_cnt <- 15
 viz_unigram_cnts <-
   visualize_cnts(
     data = unigrams,
@@ -423,14 +462,29 @@ viz_bigram_cnts <-
 viz_bigram_cnts
 ```
 
-Another method of visualizing frequencies is a word cloud.
+These count totals reflect my personal interests relatively well.
+In particular, words like `nutrition` and `chicken breast`, 
+`excel vba` and `python`, and
+`nba` and `nfl scores` highlight my interest in
+in food/nutrition, software and data analysis, and sports.
+Additionally, the places I've lived re apparent from my searches--
+`ut austin` reflects my undergraduate studies at
+the [University of Texas at Austin](https://www.utexas.edu),
+`baton rouge` alludes to my internship with 
+[ExxonMobil](corporate.exxonmobil.com/)
+in Baton Rouge in the summer of 2015,
+`round rock` hints to my current residence in Round Rock, Texas.
+
+#### Word Clouds
+
+Another method of visualizing counts is with a word cloud.
 Normally, I'm staunchly opposed to word clouds; however,
 when used to initialize a mental model of the data, they're not so bad. 
-I write a basic function so I can use it twice. (Hoorah for functions!)
+I write a basic function so I can use it twice. (Hooray for functions!)
 
 ```{r visualize_cnts_wordcloud}
 visualize_cnts_wordcloud <-
-  function(data, color, num_top = 50) {
+  function(data, color, num_top = 25) {
     data_proc <- data %>% count(word, sort = TRUE)
     wordcloud::wordcloud(
       word = data_proc$word,
@@ -440,27 +494,32 @@ visualize_cnts_wordcloud <-
       max.words = num_top
     )
   }
+get_rpal_byname <- function(name) {
+  paste0(name, c("", as.character(seq(1, 4, 1))))
+}
 
-num_top_cnt_wordcloud <- 50
+colors_wordcloud <- get_rpal_byname(params$color_main)
+num_top_cnt_wordcloud <- 25
 visualize_cnts_wordcloud(
   data = unigrams,
-  color = params$color_main,
+  color = colors_wordcloud,
   num_top = num_top_cnt_wordcloud
 )
 
 visualize_cnts_wordcloud(
   data = bigrams,
-  color = params$color_main,
+  color = colors_wordcloud,
   num_top = num_top_cnt_wordcloud
 )
 
 ```
 
-Now I compute token frequencies. This function can
-be used to compute frequencies for any time of n-gram, as long as the n-grams are
-"united" in a single column. (This might not be the case when working with bigrams, trigrams, etc.)
+These word clouds essentially show the same information as the other frequency plots,
+so it's not surprising to see the same set of words shown. The word clouds
+arguably do a better job of emphasizing the words themselves (as opposed
+to the raw count totals associated with each word(s)).
 
-```{r compute_freqs}
+```{r compute_freqs, include = FALSE}
 compute_freqs <- function(data, colname_cnt = "word") {
   colname_cnt_quo <- rlang::sym(colname_cnt)
   
@@ -489,47 +548,13 @@ bigrams_freqs <-
 bigrams_freqs
 ```
 
-While the frequencies numbers are interesting,
-it's almost always easier to contextualize
-values with a good visualization.
-
-
-```{r viz_bigrams_freqs_unused, eval = FALSE, include = FALSE}
-# Reference:
-# + https://buzzfeednews.github.io/2018-01-trump-twitter-wars/
-num_top_bigram_freq <- 10
-bigrams_freqs_viz <-
-  bigrams_freqs %>%
-  group_by(word) %>%
-  mutate(rank = row_number(desc(freq))) %>%
-  filter(rank <= num_top_bigram_freq) %>%
-  ungroup() %>%
-  arrange(name) %>%
-  mutate(word = str_replace_all(word, " ", "\n")) %>%
-  mutate(word = forcats::fct_reorder(factor(word), freq))
-
-viz_bigrams_freqs <-
-  bigrams_freqs_viz %>%
-  ggplot(aes(x = name, y = word, color = name, size = freq)) +
-  geom_point() +
-  scale_y_discrete(position = "right") +
-  scale_color_manual(values = params$color_main) +
-  scale_size_area(max_size = 25) +
-  temisc::theme_te_b() +
-  theme(legend.position = "none") +
-  coord_flip() +
-  labs(x = NULL, y = NULL) +
-  labs(title = "Most Frequently Used Pairs of Words", subtitle = "By Name")
-viz_bigrams_freqs
-```
-
 ### Word Correlations
 
 Let's add a layer of complexity to our analysis. We can look at correlations
-among individual words in each search. I create a fairly robust function here
-because I'll need to perform the same actions twice--once just to see the computed
+among individual words in each search. We'll create a fairly robust function here
+because we'll need to perform the same actions twice--once to view the computed
 values, and another time to put the data in the proper format for a network visualization.
-(We need both the counts and the correlations of each word pair.)
+(We need both the counts and the correlations of each word pair to create node-edge pairs.)
 
 ```{r compute_corrs_func}
 # Reference:
@@ -602,7 +627,8 @@ unigrams_corrs <-
 unigrams_corrs
 ```
 
-A network is really useful for visualizing correlation data like this.
+Not surprisingly, many of the same word pairs seen among the most frequently used
+bigrams also appear here.
 
 ```{r viz_corrs_network}
 # Reference:
@@ -629,23 +655,29 @@ viz_corrs_network <-
   ggraph::geom_edge_link(edge_width = 1) +
   ggraph::geom_node_point(aes(size = n), fill = "grey50", shape = 21) +
   ggraph::geom_node_text(ggplot2::aes_string(label = "name"), repel = TRUE) +
-  theme_void() +
+  theme_te_a() +
+  theme(line = element_blank(), rect = element_blank(), axis.text = element_blank(), axis.ticks = element_blank()) +
   theme(legend.position = "none") +
+  labs(x = NULL, y = NULL) +
   labs(title = "Network of Pairwise Correlations", subtitle = "By Search")
 viz_corrs_network
 ```
 
+It looks like the network captures most of the similar terms fairly well.
+The words for food/nutrition, software, and locations are grouped.
+
 ### Word Changes Over Time
 
-I'm interested to see which words I have either used more or less as time has passed.
+We might be interested to find out whether certain words
+have either been used more or less as time has passed.
 Determining the highest changes in word usage is not quite as straightforward
 as some of the other components of the text analysis so far.
-There are various valid approaches that could be implemented. I'll
-to implement a fairly simple and comprehensible one. (Specifically,
-I'll follow the approach shown in the
+There are various valid approaches that could be implemented. Here,
+we'll
+follow the approach shown in the
 [Twitter chapter in the _Tidy Text Mining_ book](https://www.tidytextmining.com/twitter.html#changes-in-word-use).
 
-First, I'll group my word usage by year and look only at the most used words.
+First, we'll group my word usage by year and look only at the most used words.
 
 ```{r unigrams_bytime}
 # Reference:
@@ -666,10 +698,9 @@ unigrams_bytime <-
   ungroup() %>%
   filter(word_total >= quantile(word_total, 1 - top_pct_words)) %>% 
   arrange(desc(word_total))
-unigrams_bytime
 ```
 
-Next, I'll create logistic models for each word-year pair. These models attempt
+Next, we'll create logistic models for each word-year pair. These models attempt
 essentially answer the question "How likely is it that a given word appears in a
 given year?"
 
@@ -681,7 +712,6 @@ unigrams_bytime_models <-
     models =
       purrr::map(data, ~ glm(cbind(n, time_total) ~ time_floor, ., family = "binomial"))
   )
-unigrams_bytime_models
 
 unigrams_bytime_models_slopes <-
   unigrams_bytime_models %>%
@@ -692,7 +722,7 @@ unigrams_bytime_models_slopes
 ```
 
 The p.values of the logistic models indicate whether or not the change in usage
-of a given word over time is non-trivial. I'll look at the words with the smallest
+of a given word over time is non-trivial. We'll look at the words with the smallest
 p.values, indicating that they have the most significant change in usage.
 
 ```{r viz_unigrams_change_bytime}
@@ -709,16 +739,38 @@ viz_unigrams_change_bytime <-
   ggplot(aes(x = time_floor, y = pct, color = word)) +
   geom_line(size = 1.5) +
   ggrepel::geom_label_repel(aes(label = label), nudge_x = 1, na.rm = TRUE) +
-  # geom_point() +
-  # geom_smooth(method = "loess", se = FALSE) +
   scale_y_continuous(labels = scales::percent_format()) +
   scale_color_func() +
-  temisc::theme_te_b_facet() +
+  temisc::theme_te_a() +
   theme(legend.position = "none") +
   labs(x = NULL, y = NULL) +
   labs(title = "Largest Changes in Word Frequency")
 viz_unigrams_change_bytime
 ```
+
+This visualization does a great job of capturing how my interests/skills
+have changed over time.
+
++ The rise of `excel` and `vba` recently reflect how much I have had
+to develop my Excel VBA skills at work (after starting my job in mid-2016).
+(I've actually had to enhance other software-related skills, such as with those with
+`SQL`, `'R`, and mapping software such as `AutoCAD`, but Excel's `VBA` has a lot of 
+little nuances that make it not so intuitive (in my opinion) 
+and put me more in need of Internet help than anything else.)
++ The steep decline in `python` from 2016 to 2017 illustrates how I learned python
+early in 2016 as part of a "side-project", 
+but then stopped my learning of it in favor of other languages/technologies that I need/use
+for my job.
++ My interest in nutrition has waxed and waned over time. I think this is
+probably because I learned a lot when reading about it for a couple of years, but now
+have found myself less in need of researching because I know a good deal about it now.
++ The appearance of `ib` might be confusing to the reader. "IB" stands for
+[International Baccalaureate](www.ibo.org/) (IB) which has a high school program for 
+that is analogous to the 
+[Advanced Placement](https://apstudent.collegeboard.org/apcourse) (AP) program that United States
+high school students are probably familiar with. After participating in the IB program
+in high school, it evident that my interest in it dropped off.
+
 
 ### Unique Words
 
@@ -729,10 +781,10 @@ inverse-document-frequency (TF-IDF). I'll leave the reader to read the details
 in the [_Tidy Text Mining_](https://www.tidytextmining.com/tfidf.html) book, 
 but, in a nutshell, TF-IDF provides a good measure
 of the most "unique" words in a given document compared to other documents.
-For my analysis,
-I'll treat the years of search history as document.
+For this analysis,
+we'll treat the years of search history as document.
 
-```{r viz_tfidf}
+```{r viz_tfidf, fig.width = 8, fig.height = 8}
 # References:
 # + https://www.tidytextmining.com/tfidf.html
 # + https://juliasilge.com/blog/sherlock-holmes-stm/
@@ -758,13 +810,29 @@ viz_tfidf <-
   facet_wrap(~ yyyy, scales = "free") +
   drlib::scale_x_reordered() +
   coord_flip() +
-  temisc::theme_te_b_dx() +
+  temisc::theme_te_a_dx() +
   theme(legend.position = "none") +
   theme(axis.text.x = element_blank()) +
   labs(x = NULL, y = NULL) +
   labs(title = "Highest TF-IDF Words", subtitle = "By Year")
 viz_tfidf
 ```
+
+This TF-IDF plot is probably my favorite one out of all of them. It really highlights
+how my use of the Internet and personal interests have changed over time (perhaps even
+better than the previous plot.
+
++ Up through graduating from high school in the middle of 2012, my search terms
+don't appear correlated with anything in particular. This makes sense to me--at this point
+in my life, I mostly used Google for doing research for school projects
++ From the middle of 2012 to the middle of 2016, I was in college studying to get
+a degree in Electrical Engineering. Words such as `integral`, `ut`, `socket`, `neutron`, reflect
+my education. At the same time, my interest in health was strongest during these years,
+so the food-related words are not surprising.
++ My more recent focus on software-related skills is evident in 2016 and beyond.
+In particular, my growing passion for `R` in 2017 is illustrated with words such as
+`ggplot`, `shiny`, `dplyr`, and `knitr`. This is one aspect of my personal skill
+development that was not as evident in the previous plot.
 
 ### Topic Modeling
 
@@ -798,31 +866,28 @@ data_dfm <-
 
 After casting to a`dtm` object (a `DocumentTermMatrix`),
 I can use the `topicmodels::LDA()` function for topic modeling.
-(Warning: This may take a minute or so.) I'm choosing 9 topics because I have
-data for 9 separate years. (Admittedly, this is a somewhat naive approach. Given that
-the start and end of my data does not correspond with the beginning and ends of years,
-perhaps I could slice the data into 12 month intervals. Another approach worth exploring
+(Warning: This may take a minute or so.) I'm choosing 7 topics because I have
+data for 7 separate years. (Admittedly, this is a somewhat naive approach.
+Another approach worth exploring
 would compile it into groups of years corresponding to "phases" in my
 schooling and career.)
 
 ```{r model_lda}
 # {r model_lda, eval = FALSE}
-lda_k <- 9
+lda_k <- 7
 seed <- 42
 model_lda <- topicmodels::LDA(data_dtm, k = lda_k, control = list(seed = seed))
 ```
 
 ```{r model_lda_stm, eval = FALSE, include = FALSE}
-lda_k <- 9
+lda_k <- 7
 model_lda <- stm::stm(data_dfm, K = lda_k, verbose = FALSE, init.type = "Spectral")
 ```
 
-```{r model_lda_io, eval = FALSE}
+```{r model_lda_io, eval = FALSE, include = FALSE}
 # {r model_lda_io, echo = FALSE}
-# saveRDS(model_lda, file.path("data", "model_stm-k9-yyyy-tony.rds"))
-# model_lda <- readRDS(file.path("data", "model_stm-k9-yyyy-tony.rds"))
-# saveRDS(model_lda, file.path("data", "model_lda-k9-yyyy-tony.rds"))
-model_lda <- readRDS(file.path("data", "model_lda-k9-yyyy-tony.rds"))
+# saveRDS(model_lda, file.path("data", "model_lda-k7-yyyy-tony.rds"))
+model_lda <- readRDS(file.path("data", "model_lda-k7-yyyy-tony.rds"))
 ```
 
 #### Word-To-Topic Probabilities
@@ -834,7 +899,7 @@ themselves are not "assigned" a word--rather, they are known simply as topic 1, 
 Nonetheless, looking at which words are most closely associated with each given topic
 allows us to infer what the topic is about.
 
-```{r viz_lda_betas}
+```{r viz_lda_betas, fig.width = 8, fig.height = 8}
 model_lda_betas <- broom::tidy(model_lda)
 num_top_beta <- 10
 viz_lda_betas <-
@@ -853,7 +918,7 @@ viz_lda_betas <-
   facet_wrap(~ topic, scales = "free_y") +
   coord_flip() +
   drlib::scale_x_reordered() +
-  temisc::theme_te_b_facet() +
+  temisc::theme_te_a_facet() +
   theme(legend.position = "none") +
   theme(axis.text.x = element_blank()) +
   labs(x = NULL, y = NULL) +
@@ -932,8 +997,8 @@ to address the "issue".
 
 ```{r model_lda_gammas_preds_fix}
 # NOTE: Manual fix for this data set!
-topic_fix <- 6
-doc_sub <- "2010"
+topic_fix <- 2
+doc_sub <- "2011"
 gamma_replcament <-
   model_lda_gammas %>% 
   filter(document == doc_sub, topic == topic_fix ) %>% 
@@ -959,7 +1024,7 @@ viz_lda_gammas_preds <-
   ggalt::geom_lollipop(aes(x = topic, y = gamma), size = 2, point.size = 4) +
   scale_color_func() +
   ylim(0, 1) +
-  temisc::theme_te_b() +
+  temisc::theme_te_a() +
   theme(legend.position = "none") +
   labs(x = NULL, y = NULL) +
   labs(title = "Document-to-Topic Probabilities")
@@ -978,7 +1043,7 @@ viz_lda_gammas <-
   geom_histogram(bins = 6) +
   scale_fill_func() +
   facet_wrap( ~ topic) +
-  temisc::theme_te_b_facet_dx() +
+  temisc::theme_te_a_facet_dx() +
   theme(legend.position = "none") +
   labs(x = NULL, y = NULL) +
   labs(title = "Distribution of Document Probabilities for Each Topic")
@@ -1009,10 +1074,9 @@ viz_lda_words_preds <-
   ggplot(aes(x = consensus, y = document, fill = pct)) +
   geom_tile() +
   scale_fill_gradient2(high = "red", label = scales::percent_format()) +
-  temisc::theme_te_b() +
+  temisc::theme_te_a() +
   theme(legend.position = "bottom") +
-  theme(axis.text.x = element_text(angle = 90, hjust = 1),
-        panel.grid = element_blank()) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1), panel.grid = element_blank()) +
   labs(x = "Prediction", y = "Actual", fill = "% of assignments") +
   labs(title = "Prediction Accuracy of Words to Documents")
 viz_lda_words_preds
@@ -1020,7 +1084,13 @@ viz_lda_words_preds
 
 ## Conclusion
 
-That's all I got! I think I'm going to work on developing a personal package
+That's about as far as I want to go with this analysis.
+I could investigate the text in a more granular manner, but that would prevent
+the analysis here from being "generalizable".
+Unfortunately, search history doesn't really lend itself to sentiment
+analysis, so I'll have to leave that for another topic.
+
+Going forward, I think I'm going to work on developing a personal package
 containing functions to re-create much of the analysis shown here.
 Thanks again to David Robinson and Julia Silge for their great
 [_Tidy Text Mining with R_ book](https://www.tidytextmining.com/)!
