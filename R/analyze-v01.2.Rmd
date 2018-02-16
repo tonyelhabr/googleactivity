@@ -22,8 +22,6 @@ knitr::opts_chunk$set(
   warning = FALSE,
   message = FALSE
 )
-
-  
 ```
 
 While brainstorming about cool ways to practice text mining with R
@@ -192,7 +190,7 @@ data <- readRDS(filepath_data)
 Next, it's time to start doing some basic exploratory data analysis (EDA).
 Given the temporal nature of the data, an easy EDA approach to implement
 is visualization across different time periods. To save some effort
-(or, as I like to see it, make my code more efficient), we cab create a 
+(or, as I like to see it, make my code more efficient), we can create a 
 helper function. (Notably, the `geom` to use is a parameter to this function.
 Through experimentation, I found that `ggplot2::geom_bar()` seems
 to work best with most temporal periods, with the exception of plotting `Date` variables,
@@ -241,8 +239,8 @@ visualize_time <-
   }
 ```
 
-Using this function is fairly straightforward. For example, to visualize my count
-count of searches by year, it can be invoked in the following manner.
+Using this function is fairly straightforward. For example, to visualize the count
+of searches by year, it can be invoked in the following manner.
 
 ```{r visualize_time_example, eval = FALSE}
 viz_time_yyyy <-
@@ -385,7 +383,7 @@ viz_time_wd_yyyy
 Now we'll "tokenize" the search text into n-grams. We'll parse each
 search query into unigrams and bigrams.
 
-```{r ngrams}
+```{r ngrams, eval = FALSE}
 # Reference (for regular expression):
 # + https://rstudio-pubs-static.s3.amazonaws.com/355045_90b7464be9b4437393670340ad67c310.html#
 rgx_patt <- '(http|https)\\S+\\s*|(#|@)\\S+\\s*|\\n|\\"|(.*.)\\.com(.*.)\\S+\\s|[^[:alnum:]]'
@@ -421,6 +419,15 @@ bigrams <-
   filter(str_detect(word1, "[a-z]")) %>% 
   filter(str_detect(word2, "[a-z]"))
 bigrams %>% select(word) %>% count(word, sort = TRUE)
+```
+
+```{r ngrams_io, echo = FALSE}
+filepath_unigrams <- "data/unigrams-tony.rds"
+filepath_bigrams <- "data/bigrams-tony.rds"
+# saveRDS(unigrams, file = filepath_unigrams)
+# saveRDS(bigrams, file = filepath_bigrams)
+unigrams <- readRDS(file = filepath_unigrams)
+bigrams <- readRDS(file = filepath_bigrams)
 ```
 
 With the data parsed into tokens, we can visualize counts of 
@@ -480,7 +487,7 @@ in Baton Rouge in the summer of 2015,
 Another method of visualizing counts is with a word cloud.
 Normally, I'm staunchly opposed to word clouds; however,
 when used to initialize a mental model of the data, they're not so bad. 
-I write a basic function so I can use it twice. (Hooray for functions!)
+I write a basic function so I can use it twice.
 
 ```{r visualize_cnts_wordcloud}
 visualize_cnts_wordcloud <-
@@ -754,7 +761,7 @@ have changed over time.
 + The rise of `excel` and `vba` recently reflect how much I have had
 to develop my Excel VBA skills at work (after starting my job in mid-2016).
 (I've actually had to enhance other software-related skills, such as with those with
-`SQL`, `'R`, and mapping software such as `AutoCAD`, but Excel's `VBA` has a lot of 
+`SQL`, `R`, and mapping software such as `AutoCAD`, but Excel's `VBA` has a lot of 
 little nuances that make it not so intuitive (in my opinion) 
 and put me more in need of Internet help than anything else.)
 + The steep decline in `python` from 2016 to 2017 illustrates how I learned python
@@ -765,11 +772,11 @@ for my job.
 probably because I learned a lot when reading about it for a couple of years, but now
 have found myself less in need of researching because I know a good deal about it now.
 + The appearance of `ib` might be confusing to the reader. "IB" stands for
-[International Baccalaureate](www.ibo.org/) (IB) which has a high school program for 
-that is analogous to the 
+[International Baccalaureate](www.ibo.org/) (IB) which is a high school program for 
+that is similar to th
 [Advanced Placement](https://apstudent.collegeboard.org/apcourse) (AP) program that United States
-high school students are probably familiar with. After participating in the IB program
-in high school, it evident that my interest in it dropped off.
+high school students are probably more familiar with. After participating in the IB program
+in high school, it is evident that my interest in it dropped off.
 
 
 ### Unique Words
@@ -782,7 +789,7 @@ in the [_Tidy Text Mining_](https://www.tidytextmining.com/tfidf.html) book,
 but, in a nutshell, TF-IDF provides a good measure
 of the most "unique" words in a given document compared to other documents.
 For this analysis,
-we'll treat the years of search history as document.
+we'll treat the years of search history as documents.
 
 ```{r viz_tfidf, fig.width = 8, fig.height = 8}
 # References:
@@ -824,9 +831,9 @@ better than the previous plot.
 
 + Up through graduating from high school in the middle of 2012, my search terms
 don't appear correlated with anything in particular. This makes sense to me--at this point
-in my life, I mostly used Google for doing research for school projects
+in my life, I mostly used Google for doing research for school projects.
 + From the middle of 2012 to the middle of 2016, I was in college studying to get
-a degree in Electrical Engineering. Words such as `integral`, `ut`, `socket`, `neutron`, reflect
+a degree in Electrical Engineering. Words such as `integral`, `ut`, and `neutron`, reflect
 my education. At the same time, my interest in health was strongest during these years,
 so the food-related words are not surprising.
 + My more recent focus on software-related skills is evident in 2016 and beyond.
@@ -834,267 +841,17 @@ In particular, my growing passion for `R` in 2017 is illustrated with words such
 `ggplot`, `shiny`, `dplyr`, and `knitr`. This is one aspect of my personal skill
 development that was not as evident in the previous plot.
 
-### Topic Modeling
-
-#### Latent Dirichlet Allocation (LDA)
-
-Now, I'll try my hand at topic modeling, using the principles laid out in
-[_Tidy Text Mining_](https://www.tidytextmining.com/topicmodeling.html).
-Notably, the book demonstrates the use of the `topicmodels` package
-for Latent Dirichlet allocation (LDA), but other
-techniques/packages are certainly valid. For example, Julia Silge
-provides examples of topic modeling using the `stm` package in a
-[a recent blog post exploring _Sherlock Holmes_ text](https://juliasilge.com/blog/sherlock-holmes-stm/).
-
-```{r data_dtm}
-# References: (for all of the topic modelling)
-# + (https://www.tidytextmining.com/topicmodeling.html)
-# + https://juliasilge.com/blog/sherlock-holmes-stm/
-
-data_dtm <-
-  unigrams %>%
-  count(yyyy, word, sort = TRUE) %>%
-  tidytext::cast_dtm(yyyy, word, n)
-```
-
-```{r data_dfm, eval = FALSE, include = FALSE}
-data_dfm <-
-  unigrams %>%
-  count(yyyy, word, sort = TRUE) %>%
-  tidytext::cast_dfm(yyyy, word, n)
-```
-
-After casting to a`dtm` object (a `DocumentTermMatrix`),
-I can use the `topicmodels::LDA()` function for topic modeling.
-(Warning: This may take a minute or so.) I'm choosing 7 topics because I have
-data for 7 separate years. (Admittedly, this is a somewhat naive approach.
-Another approach worth exploring
-would compile it into groups of years corresponding to "phases" in my
-schooling and career.)
-
-```{r model_lda}
-# {r model_lda, eval = FALSE}
-lda_k <- 7
-seed <- 42
-model_lda <- topicmodels::LDA(data_dtm, k = lda_k, control = list(seed = seed))
-```
-
-```{r model_lda_stm, eval = FALSE, include = FALSE}
-lda_k <- 7
-model_lda <- stm::stm(data_dfm, K = lda_k, verbose = FALSE, init.type = "Spectral")
-```
-
-```{r model_lda_io, eval = FALSE, include = FALSE}
-# {r model_lda_io, echo = FALSE}
-# saveRDS(model_lda, file.path("data", "model_lda-k7-yyyy-tony.rds"))
-model_lda <- readRDS(file.path("data", "model_lda-k7-yyyy-tony.rds"))
-```
-
-#### Word-To-Topic Probabilities
-
-Now we can look at the probability of a given word being associated with a given 
-topics (i.e. beta probability).
-Admittedly, the results may seem a bit simply because the topics
-themselves are not "assigned" a word--rather, they are known simply as topic 1, topic 2, etc.
-Nonetheless, looking at which words are most closely associated with each given topic
-allows us to infer what the topic is about.
-
-```{r viz_lda_betas, fig.width = 8, fig.height = 8}
-model_lda_betas <- broom::tidy(model_lda)
-num_top_beta <- 10
-viz_lda_betas <-
-  model_lda_betas %>%
-  group_by(topic) %>%
-  top_n(num_top_beta, beta) %>%
-  # arrange(desc(beta)) %>% 
-  # slice(1:num_top_beta) %>% 
-  ungroup() %>%
-  mutate(topic = paste0("Topic ", topic),
-         term = drlib::reorder_within(term, beta, topic)) %>%
-  mutate(topic = factor(topic)) %>% 
-  ggplot(aes(x = term, y = beta, fill = topic)) +
-  geom_col() +
-  scale_fill_func() +
-  facet_wrap(~ topic, scales = "free_y") +
-  coord_flip() +
-  drlib::scale_x_reordered() +
-  temisc::theme_te_a_facet() +
-  theme(legend.position = "none") +
-  theme(axis.text.x = element_blank()) +
-  labs(x = NULL, y = NULL) +
-  labs(title = "Highest Word Probabilities for Each Topic")
-viz_lda_betas
-```
-
-#### Document-To-Topic Probabilities
-
-We can use document-to-topic probabilities (gamma probabilities)
-to see how well the model predicts the document (in this case, the year) from which a 
-topic comes. I interpret this as like an extension of the beta probabilities--we go
-from words to topic with the beta values, then from topic to document with the gamma values.
-
-```{r model_lda_gammas}
-model_lda_gammas <-
-  broom::tidy(
-    # document_names = rownames(data_dtm),
-    model_lda, 
-    matrix = "gamma",
-  )
-```
-
-With my data, I found that the document-to-topic assignment would not be one-to-one
-if I simply determined that the consensus document choice of the LDA model is
-the document with the highest gamma value.
-(Put another way, at least on document would not be the consensus choice for any
-topic, and visa versa.)
-This "issue" would prevent some of the following visualizations from turning out
-how I would like them if no action is taken to address it.
-(In particular, it makes a confusion matrix "misaligned".)
-
-```{r model_lda_gammas_debug}
-# NOTE: The document-to-topic assignment may not be one-to-one!
-model_lda_gammas_ranked <-
-  model_lda_gammas %>% 
-  group_by(topic) %>%
-  mutate(rank = row_number(desc(gamma))) %>% 
-  arrange(topic, rank) %>% 
-  ungroup()
-model_lda_gammas_ranked %>% filter(rank == 1)
-model_lda_gammas_ranked %>% filter(rank == 2)
-
-model_lda_gammas_ranked %>% 
-  filter(rank <= 2) %>% 
-  select(-document) %>% 
-  tidyr::spread(rank, gamma) %>% 
-  mutate(gamma_diff = `1` -`2`) %>% 
-  arrange(gamma_diff)
-```
-
-Nonetheless, to prepare to visualize the gammas values, I'll simply make naive
-assignment of a consensus document for a given topic
-by selecting the document with the highest gamma value for each topic.
-
-```{r model_lda_gammas_preds}
-model_lda_gammas_preds <-
-  model_lda_gammas %>% 
-  group_by(topic) %>%
-  top_n(1, gamma) %>%
-  mutate(rank = row_number(desc(gamma))) %>% 
-  ungroup() %>%
-  transmute(consensus = document, topic, gamma)
-```
-
-Keeping in mind the document that is not assigned to any topic (and the topics
-that share the same document assignment), I "manually" fix the assignments
-by making a reasonable re-assignment based on the gamma values of the missing
-document and its relative value among the documents in the topics that share
-a consensus choice.
-
-Note that not everyone may have the same issue with their own data.
-And, even if faced with a similar circumstance (or a similar one where multiple
-documents do not have obvious assignments), one may choose not to do anything at all
-to address the "issue".
-
-```{r model_lda_gammas_preds_fix}
-# NOTE: Manual fix for this data set!
-topic_fix <- 2
-doc_sub <- "2011"
-gamma_replcament <-
-  model_lda_gammas %>% 
-  filter(document == doc_sub, topic == topic_fix ) %>% 
-  pull(gamma)
-
-model_lda_gammas_preds <-
-  model_lda_gammas_preds %>% 
-  mutate(consensus = ifelse(topic == topic_fix , doc_sub, consensus)) %>% 
-  mutate(gamma = ifelse(topic == topic_fix, gamma_replcament, gamma))
-```
-
-After the fix, I can visualize the gamma values of the document-to-topic
-assignments that the model has made (including any "manual" assignments).
-Notably, my one "fix" stands out as having a relatively low probability.
-
-```{r viz_lda_gammas_preds}
-viz_lda_gammas_preds <-
-  model_lda_gammas_preds %>%
-  mutate(topic = paste0("Topic ", topic)) %>% 
-  mutate(topic = factor(topic)) %>% 
-  ggplot(aes(x = topic, y = gamma, color = topic)) +
-  # geom_point() +
-  ggalt::geom_lollipop(aes(x = topic, y = gamma), size = 2, point.size = 4) +
-  scale_color_func() +
-  ylim(0, 1) +
-  temisc::theme_te_a() +
-  theme(legend.position = "none") +
-  labs(x = NULL, y = NULL) +
-  labs(title = "Document-to-Topic Probabilities")
-viz_lda_gammas_preds
-```
-
-```{r viz_lda_gammas, include = FALSE, eval = FALSE}
-# Reference:
-# + https://www.tidytextmining.com/nasa.html#topic-modeling.
-# + https://juliasilge.com/blog/sherlock-holmes-stm/.
-viz_lda_gammas <-
-  model_lda_gammas %>%
-  mutate(topic = paste0("Topic ", topic)) %>% 
-  mutate(topic = factor(topic)) %>% 
-  ggplot(aes(x = gamma, fill = topic)) +
-  geom_histogram(bins = 6) +
-  scale_fill_func() +
-  facet_wrap( ~ topic) +
-  temisc::theme_te_a_facet_dx() +
-  theme(legend.position = "none") +
-  labs(x = NULL, y = NULL) +
-  labs(title = "Distribution of Document Probabilities for Each Topic")
-viz_lda_gammas
-```
-
-#### Word-To-Document Probabilities
-
-Finally, it can be insightful to see to which document the model
-assigns each individual word (as opposed to the handful topics).
-In the case that the gamma probabilities are
-inaccurate, identifying which words are misclassified can provide an indication
-of why the model is erroneous. This can be extremely important in a real world
-context.
-
-```{r viz_lda_words_preds}
-model_lda_words_preds <- model_lda %>% broom::augment(data_dtm)
-model_lda_words_preds_joined <-
-  model_lda_words_preds %>%
-  inner_join(model_lda_gammas_preds %>% select(-gamma), by = c(".topic" = "topic"))
-
-viz_lda_words_preds <-
-  model_lda_words_preds_joined %>%
-  count(document, consensus, wt = count) %>%
-  group_by(document) %>%
-  mutate(pct = n / sum(n)) %>%
-  arrange(document, consensus) %>% 
-  ggplot(aes(x = consensus, y = document, fill = pct)) +
-  geom_tile() +
-  scale_fill_gradient2(high = "red", label = scales::percent_format()) +
-  temisc::theme_te_a() +
-  theme(legend.position = "bottom") +
-  theme(axis.text.x = element_text(angle = 90, hjust = 1), panel.grid = element_blank()) +
-  labs(x = "Prediction", y = "Actual", fill = "% of assignments") +
-  labs(title = "Prediction Accuracy of Words to Documents")
-viz_lda_words_preds
-```
 
 ## Conclusion
 
-That's about as far as I want to go with this analysis.
-I could investigate the text in a more granular manner, but that would prevent
-the analysis here from being "generalizable".
-Unfortunately, search history doesn't really lend itself to sentiment
-analysis, so I'll have to leave that for another topic.
+I'll continue this analysis in a separate write-up, wher I plan to investigate
+how "topic modeling" can be applied to gain further insight.
+Topic modeling is much more dependent on the nature of the data 
+than the analysis done here (which is fairly "generalizable"),
+so I think it deserves distinct treatment.
 
-Going forward, I think I'm going to work on developing a personal package
-containing functions to re-create much of the analysis shown here.
 Thanks again to David Robinson and Julia Silge for their great
 [_Tidy Text Mining with R_ book](https://www.tidytextmining.com/)!
 It demonstrates simple, yet powerful, techniques
 that can be easily leveraged to gain meaningful insight into nearly anything you can imagine.
-
 
