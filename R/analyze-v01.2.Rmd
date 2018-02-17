@@ -3,7 +3,7 @@ title: "Analysis of Personal Google Search History"
 author: ""
 date: ""
 output:
-  html_document:
+  html_document::
     toc: false
 ---
 
@@ -53,7 +53,30 @@ I provide references for my inspiration where appropriate.
 
 ## Setup
 
-To begin, I create a `params` list in order to emulate what one might 
+
+First, following "best practices", I import all of the packages that I'll need.
+
+```{r import_packages}
+library("dplyr")
+library("stringr")
+library("xml2")
+library("rvest")
+library("lubridate")
+library("viridis")
+library("ggplot2")
+library("tidytext")
+library("tidyr")
+library("ggalt")
+library("widyr")
+library("drlib")
+library("igraph")
+library("ggraph")
+# library("topicmodels")
+# devtools::install_github("tonyelhabr/temisc")
+library("temisc") # Personal package.
+```
+
+Next, I create a `params` list in order to emulate what one might 
 do with a parameterized RMarkdown report (where the `params` would be a 
 part of the yaml header.
 
@@ -87,22 +110,6 @@ scale_fill_func <- function() {
     end = 0.75
   ) 
 }
-```
-
-
-Next, following "best practices", I import all of the packages that I'll need.
-
-```{r import_packages}
-library("dplyr")
-library("stringr")
-library("xml2")
-library("rvest")
-library("lubridate")
-library("ggplot2")
-library("tidytext")
-library("topicmodels")
-# devtools::install_github("tonyelhabr/temisc")
-library("temisc") # Personal package.
 ```
 
 ### Import and Clean
@@ -670,6 +677,11 @@ viz_corrs_network <-
 viz_corrs_network
 ```
 
+```{r eval = FALSE}
+ggsave(viz_corrs_network, file = "figs/viz_corrs_network-tony.png", units = "in", width = 6, height = 6)
+ggsave(viz_corrs_network, file = "figs/viz_corrs_network-tony-banner.png", units = "in", width = 8, height = 3)
+```
+
 It looks like the network captures most of the similar terms fairly well.
 The words for food/nutrition, software, and locations are grouped.
 
@@ -823,6 +835,11 @@ viz_tfidf <-
   labs(x = NULL, y = NULL) +
   labs(title = "Highest TF-IDF Words", subtitle = "By Year")
 viz_tfidf
+```
+
+```{r eval = FALSE}
+ggsave(viz_tfidf, file = "figs/viz_tfidf-tony.png", units = "in", width = 8, height = 8)
+ggsave(viz_tfidf, file = "figs/viz_tfidf-tony-banner.png", units = "in", width = 8, height = 3)
 ```
 
 This TF-IDF plot is probably my favorite one out of all of them. It really highlights
