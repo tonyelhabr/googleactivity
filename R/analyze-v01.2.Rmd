@@ -189,6 +189,7 @@ filepath_data <- "data/data-tony-cleaned.rds"
 # saveRDS(data, file = filepath_data)
 data <- readRDS(filepath_data)
 # readr::write_csv(data, path = gsub("\\.rds", ".csv", filepath_data))
+# data <- readr::read_csv(gsub("\\.rds", ".csv", filepath_data))
 ```
 
 ## Analysis
