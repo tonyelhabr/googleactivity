@@ -1,0 +1,1196 @@
+---
+title: "Analysis of Personal Google Search History"
+author: ""
+date: ""
+output:
+  temisc::html_te:
+    toc: false
+    fig_width: 8
+    fig_height: 8
+---
+
+```{r include = FALSE}
+knitr::opts_knit$set(root.dir = rprojroot::find_rstudio_root_file())
+```
+
+While brainstorming about cool ways to practice text mining with R
+I came up with the idea of exploring my own Google search history.
+Then, after googling (ironically) if anyone had done something like this, I stumbled upon 
+[Lisa Charlotte's blog post](https://lisacharlotterost.github.io/2015/06/20/Searching-through-the-years/). 
+Lisa's post (actually, a series of posts) are from a while back, so
+her instructions for how to download your personal Google history and the format
+of the downloads (nowadays, it's in a .html file instead of a series of .json files)
+are no longer applicable.
+
+I googled a bit more and found a recent
+[RPubs write-up by Stephanie Lancz](https://rstudio-pubs-static.s3.amazonaws.com/355045_90b7464be9b4437393670340ad67c310.html#) 
+that not only included concise instructions on how/where to get personal Google data,
+but also how to clean it with `R`!
+With the hard work of figuring out how to set up the data provided for me,
+I was excited to find out what I could do.
+
+In this write-up (which
+can be downloaded from GitHub and re-used for one's own analysis), I explore
+different techniques for visualizing and understanding my data.
+I do my best to implement methods that are generic and could be applied to any
+kind of similar analysis, irregardless of the topic.
+Much of my code is guided by the work of others, so I give
+provide references for my inspiration where appropriate.
+
+## Analysis
+
+### Setup
+
+To begin, I create a `params` list in order to emulate what one might 
+do with a parameterized RMarkdown report (where the `params` would be a 
+part of the yaml header.
+
+```{r}
+# params <-
+#   list(
+#     filepath = "data-raw/Tony-My Activity-Search-MyActivity.html",
+#     name_main = "Tony",
+#     color_main = "firebrick"
+#   )
+params <-
+  list(
+    filepath = "data-raw/Tony-My Activity-Search-MyActivity.html",
+    name_main = "Tony",
+    color_main = "maroon"
+  )
+```
+
+Next, following "best practices", I import all of the packages that I'll need.
+
+```{r}
+library("dplyr")
+library("stringr")
+library("xml2")
+library("rvest")
+library("lubridate")
+library("ggplot2")
+library("tidytext")
+library("stm")
+# devtools::install_github("tonyelhabr/temisc")
+library("temisc") # Personal package.
+```
+
+### Import and Clean
+
+Then, on to the "dirty" work of importing and cleaning the data.
+I don't deviate much from 
+[Stephanie Lancz's methods](https://rstudio-pubs-static.s3.amazonaws.com/355045_90b7464be9b4437393670340ad67c310.html#)  for extracting data elements
+from the .html file
+
+```{r}
+# Reference:
+# + https://rstudio-pubs-static.s3.amazonaws.com/355045_90b7464be9b4437393670340ad67c310.html#
+
+doc_html <- params$filepath
+search_archive <- xml2::read_html(doc_html)
+
+# Extract search time.
+date_search <-
+  search_archive %>%
+  html_nodes(xpath = '//div[@class="mdl-grid"]/div/div') %>%
+  str_extract(pattern = "(?<=<br>)(.*)(?<=PM|AM)") %>%
+  mdy_hms()
+
+# Extract search text.
+text_search <-
+  search_archive %>%
+  html_nodes(xpath = '//div[@class="mdl-grid"]/div/div') %>%
+  str_extract(pattern = '(?<=<a)(.*)(?=</a>)') %>%
+  str_extract(pattern = '(?<=\">)(.*)')
+
+# Extract search type.
+type_search <-
+  search_archive %>% 
+  html_nodes(xpath = '//div[@class="mdl-grid"]/div/div') %>% 
+  str_extract(pattern = "(?<=mdl-typography--body-1\">)(.*)(?=<a)") %>% 
+  str_extract(pattern = "(\\w+)(?=\\s)")
+
+# Differences from reference:
+# + Using `lubridate::wday()` instead of calling `weekdays()` and coercing to factors.
+# + Using `yyyy`, `mm`, `wd`, and `hh` instead of `year`, `month`, `wday`, and `hour`.
+# + Convert `yyyy` to an integer (from a double).
+# + Adding a `time` column to use for a later visualization.
+# + Adding a `name` column to make this code more "parametric".
+data <-
+  tibble(
+    name = params$name_main,
+    timestamp = date_search,
+    date = lubridate::as_date(date_search),
+    yyyy = lubridate::year(date_search) %>% as.integer(),
+    mm = lubridate::month(date_search, label = TRUE),
+    wd = lubridate::wday(date_search, label = TRUE),
+    hh = lubridate::hour(date_search),
+    time = lubridate::hour(timestamp) + (lubridate::minute(timestamp) / 60),
+    type = type_search,
+    text = text_search
+  )
+
+```
+
+Notably, there are some rows that did not get parsed correctly. I decide to exclude
+them from the rest of the analysis.
+
+```{r}
+data %>% count(yyyy, sort = TRUE)
+data <- data %>% filter(!is.na(yyyy))
+```
+
+### Count Distributions
+
+Next, it's time to start doing some basic exploratory data analysis (EDA).
+Given the temporal nature of the data, an easy EDA approach to implement
+is visualizaion across different time periods. To save myself some effort
+(or, as I like to see it, make my code more efficient), I create a 
+visualization "helper" function. Notably, the `geom` to use is a parameter to this function.
+Through experimentation, I found that `ggplot2::geom_bar()` and `ggplot2::geom_hist()` seem
+to work better with different temporal periods.
+
+```{r}
+# Reference:
+# + https://juliasilge.com/blog/ten-thousand-data/.
+visualize_bytime <-
+  function(data,
+           colname_x,
+           geom = c("bar", "hist"),
+           color = "grey50",
+           lab_subtitle = NULL) {
+    
+    if(is.null(colname_x)) 
+      stop("`colname_x` must not be NULL.", call. = FALSE)
+    geom <- match.arg(geom)
+    viz_labs <-
+      labs(
+        x = NULL,
+        y = NULL,
+        title = "Count Over Time",
+        subtitle = lab_subtitle
+      )
+    viz_theme <-
+      temisc::theme_te_b_facet() +
+      theme(panel.grid.major.x = element_blank()) +
+      theme(legend.position = "none")
+
+    viz <- ggplot(data, aes_string(x = colname_x)) 
+    if (geom == "bar") {
+      viz <-
+        viz +
+        geom_bar(aes_string(y = "..count.."))
+    } else if (geom == "hist") {
+      viz <-
+        viz +
+        geom_histogram(aes_string(y = "..count.."), bins = 30)
+    }
+
+    viz <-
+      viz +
+      scale_fill_manual(values = color) +
+      viz_labs +
+      viz_theme
+    viz
+  }
+```
+
+Using this function is fairly straightforward. For example, to visualize my count
+count of searches by year, it can be invoked in the following manner.
+
+```{r eval = FALSE}
+viz_bytime_yyyy <-
+  visualize_bytime(
+    data = data,
+    colname_x = "yyyy",
+    geom = "bar",
+    color = params$color_main,
+    lab_subtitle = "By Year"
+  )
+```
+
+The same pattern can be repeated for `timestamp`, `yyyy`, `mm`, `wd`, and `hh`.
+
+```{r include = FALSE}
+lab_subtitle_all <-
+  paste0(
+    "From ",
+    strftime(data$timestamp[1], "%Y-%m-%d"),
+    " to ",
+    strftime(rev(data$timestamp)[1], "%Y-%m-%d")
+  )
+
+viz_bytime_all <-
+  visualize_bytime(
+    data = data,
+    colname_x = "timestamp",
+    geom = "hist",
+    color_char = "name",
+    color = params$color_main,
+    lab_subtitle = lab_subtitle_all
+  )
+
+# NOTE: Could probably use `purrr::pmap()` for the following.
+viz_bytime_yyyy <-
+  visualize_bytime(
+    data = data,
+    colname_x = "yyyy",
+    geom = "bar",
+    color_char = "name",
+    color = params$color_main,
+    lab_subtitle = "By Year"
+  )
+
+viz_bytime_mm <-
+  visualize_bytime(
+    data = data,
+    colname_x = "mm",
+    geom = "bar",
+    color_char = "name",
+    color = params$color_main,
+    lab_subtitle = "By Month"
+  )
+
+viz_bytime_wd <-
+  visualize_bytime(
+    data = data,
+    colname_x = "wd",
+    geom = "bar",
+    color_char = "name",
+    color = params$color_main,
+    lab_subtitle = "By Day of Week"
+  )
+
+viz_bytime_hh <-
+  visualize_bytime(
+    data = data,
+    colname_x = "hh",
+    geom = "bar",
+    color_char = "name",
+    color = params$color_main,
+    lab_subtitle = "By Hour"
+  )
+```
+
+```{r echo = FALSE}
+viz_bytime_all
+viz_bytime_yyyy 
+viz_bytime_mm
+viz_bytime_wd
+viz_bytime_hh
+```
+
+Of course, other `geom`s can be used to visualize the data in other interesting ways.
+For instance, I could create a violin plot for the by-hour counts.
+
+```{r include = FALSE, eval = FALSE}
+# Reference:
+# + https://buzzfeednews.github.io/2018-01-trump-twitter-wars/
+viz_bytime_hh_2 <-
+  data %>%
+  ggplot(aes(x = name, y = time, fill = name)) +
+  scale_y_continuous(
+    limits = c(1, 24),
+    breaks = c(6, 12, 18),
+    labels = c("6am", "Noon", "6pm")
+  ) +
+  scale_fill_manual(values = params$color_main) +
+  geom_violin(size = 0) +
+  geom_hline(
+    yintercept = seq(3, 24, by = 3),
+    color = "gray",
+    size = 0.1
+  ) +
+  labs(x = NULL, y = NULL) +
+  labs(title = "Count Over Time", lab_subtitle = "By Time of Day") +
+  temisc::theme_te_b_dx() +
+  theme(legend.position = "none", panel.grid = element_blank()) +
+  coord_flip()
+```
+
+```{r include = FALSE, eval = FALSE}
+# Reference:
+# + https://rstudio-pubs-static.s3.amazonaws.com/355045_90b7464be9b4437393670340ad67c310.html#
+viz_bytime_hh_wd <-
+  data %>%
+  ggplot(aes(x = hh, group = wd, fill = name)) +
+  geom_bar() +
+  scale_fill_manual(values = params$color_main) +
+  facet_wrap( ~ wd, scales = "free") +
+  labs(x = NULL, y = NULL) +
+  labs(title = "Count Over Time", lab_subtitle = "By Hour of Day and Time of Day") +
+  temisc::theme_te_b_facet_dx() +
+  theme(legend.position = "none", panel.grid = element_blank())
+
+# Reference:
+# + https://rstudio-pubs-static.s3.amazonaws.com/355045_90b7464be9b4437393670340ad67c310.html#
+viz_bytime_wd_yyyy <-
+  data %>%
+  count(name, yyyy, wd) %>%
+  ggplot(aes(x = wd, y = n, fill = yyyy)) +
+  geom_bar(stat = "identity") +
+  facet_wrap(~name, scales = "free") +
+  labs(x = NULL, y = NULL) +
+  labs(title = "Count Over Time", lab_subtitle = "By Day of Week and Year") +
+  temisc::theme_te_b_facet_dx() +
+  theme(legend.position = "bottom", panel.grid = element_blank())
+
+```
+
+### Word Frequencies
+
+Again, I'll create a generic function (actually, functions), this time for sentiment analysis.
+Although I'm only using these functions once, I find that it's nice to make them
+abstract so that I can use them in other analyses. Thanks to Julia and David
+for making their `tidytext` package compatible with `tidyeval`.
+
+
+```{r}
+tidify_to_unigrams <-
+  function(data = NULL,
+           colname_text = "text",
+           colname_word = "word",
+           rgx_pattern,
+           rgx_replacement,
+           rgx_unnest,
+           stopwords = TRUE,
+           stopwords_lexicon,
+           rgx_ignore_custom) {
+    
+    if(is.null(data)) stop("`data` cannot be NULL.", call. = FALSE)
+    colname_text_quo <- rlang::sym(colname_text)
+    colname_word_quo <- rlang::sym(colname_word)
+    
+    out <- data
+    if (!missing(rgx_pattern) & !missing(rgx_replacement)) {
+      out <-
+        mutate(out,
+               text = str_replace_all(!!colname_text_quo, rgx_pattern, rgx_replacement))
+    }
+    
+    if (missing(rgx_unnest)) {
+      out <-
+        tidytext::unnest_tokens(out, !!colname_word_quo, !!colname_text_quo)
+    } else {
+      out <-
+        tidytext::unnest_tokens(out, !!colname_word_quo, !!colname_text_quo, rgx_unnest)
+    }
+
+    if(stopwords) {
+      
+      if(missing(stopwords_lexicon)) {
+        stop_words <- tidytext::stop_words
+      } else {
+        stop_words <- tidytext::get_stopwords(source = stopwords_lexicon)
+      }
+      
+      # NOTE: Not sure why, but tidyeval is not wokring with `dplyr::anti_join()`,
+      # so using a work-around.
+      # out <- dplyr::anti_join(out, stop_words, by = c(colname_word = "word"))
+      out <- dplyr::rename(out, word = !!colname_word_quo)
+      out <- dplyr::anti_join(out, stop_words, by = "word")
+      out <- dplyr::rename(out, !!colname_word_quo := word)
+    }
+    
+    if (!missing(rgx_ignore_custom)) {
+      out <-
+        filter(out, !str_detect(!!colname_word_quo, rgx_ignore_custom))
+    }
+    
+    out <- filter(out, str_detect(!!colname_word_quo, "[a-z]"))
+    out
+  }
+# NOTE: Probably could create some helper functions to reduce the repetitiviness
+# within this function, and also the overlap with the unigrams function.
+tidify_to_bigrams <-
+  function(data = NULL,
+           colname_text = "text",
+           colname_words = "bigram", 
+           colname_word1 = "first",
+           colname_word2 = "second",
+           rgx_pattern,
+           rgx_replacement,
+           stopwords = TRUE,
+           stopwords_lexicon,
+           rgx_ignore_custom) {
+
+    if(is.null(data)) stop("`data` cannot be NULL.", call. = FALSE)
+    colname_text_quo <- rlang::sym(colname_text)
+    colname_words_quo <- rlang::sym(colname_words)
+    colname_word1_quo <- rlang::sym(colname_word1)
+    colname_word2_quo <- rlang::sym(colname_word2)
+
+    out <- data
+    if (!missing(rgx_pattern) & !missing(rgx_replacement)) {
+      out <-
+        dplyr::mutate(out,
+               text = stringr::str_replace_all(!!colname_text_quo, rgx_pattern, rgx_replacement))
+    }
+    out <- tidytext::unnest_tokens(out, !!colname_words_quo, !!colname_text_quo, token = "ngrams", n = 2)
+    out <- tidyr::separate(out, !!colname_words_quo, 
+                           into = c(colname_word1, colname_word2), sep = " ", remove = FALSE)
+    if(stopwords) {
+      
+      if(missing(stopwords_lexicon)) {
+        stop_words <- tidytext::stop_words
+      } else {
+        stop_words <- tidytext::get_stopwords(source = stopwords_lexicon)
+      }
+      out <- dplyr::rename(out, word = !!colname_word1_quo)
+      out <- dplyr::anti_join(out, stop_words, by = "word")
+      out <- dplyr::rename(out, !!colname_word1_quo := word)
+      
+      out <- dplyr::rename(out, word = !!colname_word2_quo)
+      out <- dplyr::anti_join(out, stop_words, by = "word")
+      out <- dplyr::rename(out, !!colname_word2_quo := word)
+    }
+    if (!missing(rgx_ignore_custom)) {
+      out <-
+        dplyr::filter(out, !stringr::str_detect(!!colname_word1_quo, rgx_ignore_custom))
+      out <-
+        dplyr::filter(out, !stringr::str_detect(!!colname_word2_quo, rgx_ignore_custom))
+    }
+
+    out <- dplyr::filter(out, stringr::str_detect(!!colname_word1_quo, "[a-z]"))
+    out <- dplyr::filter(out, stringr::str_detect(!!colname_word2_quo, "[a-z]"))
+    out
+  }
+```
+
+Now I can apply my (overly) robust functions to break down the data into unigrams and bigrams.
+
+```{r}
+# Reference (for regular expression):
+# + https://rstudio-pubs-static.s3.amazonaws.com/355045_90b7464be9b4437393670340ad67c310.html#
+rgx_pattern_search <- '(http|https)\\S+\\s*|(#|@)\\S+\\s*|\\n|\\"|(.*.)\\.com(.*.)\\S+\\s|[^[:alnum:]]'
+rgx_replacement_search <- " "
+
+# References:
+# + https://www.tidytextmining.com/
+# + https://www.tidytextmining.com/ngrams.html
+# + https://www.tidytextmining.com/twitter.html
+
+data_tidy_unigrams <-
+  data %>%
+  tidify_to_unigrams(
+    rgx_pattern = rgx_pattern_search, 
+    rgx_replacement = rgx_replacement_search
+  )
+data_tidy_unigrams %>% select(word, name) %>% count(word, sort = TRUE)
+
+
+# References:
+# + https://www.tidytextmining.com/
+# + https://www.tidytextmining.com/ngrams.html
+data_tidy_bigrams <-
+  data %>%
+  tidify_to_bigrams(
+    rgx_pattern = rgx_pattern_search, 
+    rgx_replacement = rgx_replacement_search
+  )
+data_tidy_bigrams %>% select(bigram, name) %>% count(bigram, sort = TRUE)
+```
+
+Now I create a generic function for computing frequencies. This function can
+be used to compute frequencies for any time of n-gram, as long as the n-grams are
+"united" in a single column. (This might not be the case when working with bigrams, trigrams, etc.)
+
+```{r}
+get_ngrams_freqs_byx <-
+  function(data = NULL, 
+           colname_x = "name", 
+           colname_cnt = "word") {
+  
+  if(is.null(data)) stop("`data` cannot be NULL.", call. = FALSE)
+  colname_x_quo <- rlang::sym(colname_x)
+  colname_cnt_quo <- rlang::sym(colname_cnt)
+
+  ngrams_cnt_1 <- dplyr::count(data, !!colname_x_quo)
+  ngrams_cnt_2 <- dplyr::count(data, !!colname_x_quo, !!colname_cnt_quo)
+
+  ngrams_joined <- dplyr::left_join(ngrams_cnt_2, dplyr::rename(ngrams_cnt_1, total = n), by = "name")
+  out <- dplyr::mutate(ngrams_joined, freq = n / total)
+  out <- dplyr::arrange(out, dplyr::desc(freq))
+  out
+}
+
+```
+
+Of course, what good is a function if you don't use it.
+
+```{r}
+unigrams_freqs_byx <-
+  get_ngrams_freqs_byx(
+    data_tidy_unigrams,
+    colname_x = "name",
+    colname_cnt = "word"
+  )
+unigrams_freqs_byx
+
+bigrams_freqs_byx <-
+  get_ngrams_freqs_byx(
+    data_tidy_bigrams,
+    colname_x = "name",
+    colname_cnt = "bigram"
+  )
+bigrams_freqs_byx
+```
+
+
+While the frequencies numbers are interesting, it's almost always easier to contextualize
+values with a good visualization.
+
+```{r}
+# Inspired by https://github.com/dgrtwo/dgrtwo.github.com/blob/master/_R/2016-08-09-trump-data.Rmd here.
+# TODO: Improve this.
+visualize_cnt_byx <- function(data = NULL,
+                              colname_x = NULL,
+                              num_top = 20,
+                              color_char,
+                              colname_facet,
+                              color = "grey50") {
+  
+    if(is.null(data)) stop("`data` cannot be NULL.", call. = FALSE)
+    if(is.null(colname_x)) stop("`colname_x` cannot be NULL.", call. = FALSE)
+    
+    x_quo <- rlang::sym(colname_x)
+    fill_quo <- rlang::sym(color_char)
+    if(missing(colname_facet)) {
+      data_proc <-
+        data %>%
+        dplyr::count(!!x_quo, sort = TRUE) %>%
+        dplyr::filter(dplyr::row_number(dplyr::desc(n)) <= num_top) %>%
+        dplyr::mutate(!!x_quo := reorder(!!x_quo, n))
+    } else {
+      facet_quo <- rlang::sym(colname_facet)
+      data_proc <-
+        data %>%
+        dplyr::count(!!facet_quo, !!x_quo, sort = TRUE) %>%
+        dplyr::group_by(!!facet_quo) %>%
+        dplyr::filter(dplyr::row_number(dplyr::desc(n)) <= num_top) %>%
+        # dplyr::mutate(!!x_quo := drlib::reorder_within(!!x_quo, n, !!facet_quo)) %>%
+        dplyr::mutate(!!x_quo := drlib::reorder_within(word, n, name)) %>%
+        dplyr::ungroup()
+    }
+    viz <-
+      data_proc %>%
+      ggplot2::ggplot(ggplot2::aes_string(x = colname_x, y = "n")) +
+      ggalt::geom_lollipop(size = 2, point.size = 4)
+
+    if (missing(colname_facet)) {
+      viz <-
+        viz +
+        ggplot2::scale_color_manual(values = color) +
+        temisc::theme_te_b()
+    } else {
+      viz <-
+        viz +
+        ggalt::geom_lollipop(ggplot2::aes_string(color = color_char), size = 2, point.size = 4) +
+        ggplot2::scale_color_manual(values = color) +
+        drlib::scale_x_reordered() +
+        ggplot2::facet_wrap(as.formula(paste0("~", colname_facet)), scales = "free") +
+        temisc::theme_te_b_facet() +
+        ggplot2::labs(subtitle = paste0("By ", stringr::str_to_title(colname_facet)))
+    }
+    viz <-
+      viz +
+      ggplot2::coord_flip() +
+      ggplot2::labs(x = NULL, y = NULL) +
+      ggplot2::labs(title = "Count of Words") +
+      ggplot2::theme(legend.position = "none") +
+      ggplot2::theme(panel.grid.major.y = ggplot2::element_blank())
+    viz
+  }
+viz_unigrams_cnt <-
+  visualize_cnt_byx(
+    data_tidy_unigrams,
+    colname_x = "word",
+    color_char = "name",
+    color = params$color_main
+  )
+viz_unigrams_cnt
+```
+
+Another method of visualizing frequencies is a wordcloud.
+Normally, I'm staunchly opposed to wordclouds; however,
+when used to initialize a mental model of the data, they're not so bad. 
+I purposely set up this function
+to be compatible with `purrr` so that more than one wordcloud can be generated
+with a single `purrr::map2()` call. In this analysis, where I only have one name (my own),
+this functionality is not used. Nonetheless, it can certainly be useful if using
+this function when analyzing more than one name at a time.
+
+```{r}
+visualize_freqs_byx_wordcloud <-
+  function(data, x_filter, color, max_words = 50) {
+    out <-
+      wordcloud::wordcloud(
+        word = data_proc$word,
+        freq = data_proc$n,
+        max.words = max_words,
+        random.order = FALSE,
+        colors = color
+      )
+    out
+  }
+```
+
+```{r}
+purrr::map2(
+  params$color_main,
+  ~visualize_freqs_byx_wordcloud(
+    data = unigrams_freqs_byx,
+    color = .x
+  )
+)
+
+```
+
+I can re-use the function for the bigram frequencies. (Yay for functions!)
+
+```{r, echo = FALSE, results = "hide"}
+# Must rename `bigram` to `word` for function.
+purrr::map2(
+  params$color_main,
+  ~visualize_freqs_byx_wordcloud(
+    data = bigrams_freqs_byx %>% rename(word = bigram),
+    color = .x
+  )
+)
+```
+
+```{r eval = FALSE, include = FALSE}
+# "10" is a subjective choice.
+num_top_bigram_freq <- 10
+bigrams_freqs_byx_viz <-
+  bigrams_freqs_byx %>%
+  group_by(name) %>%
+  mutate(rank = row_number(desc(freq))) %>%
+  filter(rank <= num_top_bigram_freq) %>%
+  ungroup() %>%
+  arrange(name) %>%
+  mutate(bigram = str_replace_all(bigram, " ", "\n")) %>%
+  mutate(bigram = forcats::fct_reorder(factor(bigram), freq))
+
+viz_bigrams_freqs_byx <-
+  bigrams_freqs_byx_viz %>%
+  ggplot(aes(x = name, y = bigram, color = name, size = freq)) +
+  geom_point() +
+  scale_y_discrete(position = "right") +
+  scale_color_manual(values = params$color_main) +
+  scale_size_area(max_size = 25) +
+  temisc::theme_te_b() +
+  theme(legend.position = "none") +
+  coord_flip() +
+  labs(x = NULL, y = NULL) +
+  labs(title = "Most Frequently Used Pairs of Words", subtitle = "By Name")
+viz_bigrams_freqs_byx
+```
+
+### Word Correlations
+
+```{r}
+compute_ngrams_byx_corrs <-
+  function(data = NULL,
+           colname_word = NULL,
+           colname_feature = NULL,
+           num_top_ngrams = 50,
+           num_top_corrs = 50,
+           return_corrs = TRUE,
+           return_words = FALSE,
+           return_both = FALSE) {
+    if(is.null(data)) {
+      stop("`data` cannot be NULL.", call. = FALSE)
+    }
+    if(is.null(colname_word)) {
+      stop("`colname_word` cannot be NULL.", call. = FALSE)
+    }
+    if(is.null(colname_feature)) {
+      stop("`colname_feature` cannot be NULL.", call. = FALSE)
+    }
+    
+    colname_word_quo <- rlang::sym(colname_word)
+    colname_feature_quo <- rlang::sym(colname_feature)
+    
+    data_byx_cnt <- dplyr::count(data, !!colname_word_quo, sort = TRUE)
+    
+    data_byx_cnt_ranked <-
+      dplyr::mutate(data_byx_cnt, rank = dplyr::row_number(dplyr::desc(n)))
+    data_byx_cnt_top <-
+      dplyr::filter(data_byx_cnt_ranked, rank <= num_top_ngrams)
+
+    data_byx_joined <-
+      dplyr::semi_join(data, data_byx_cnt_top, by = colname_word)
+    
+    data_byx_joined_renamed <-
+      dplyr::rename(
+        data_byx_joined,
+        word = !!colname_word_quo,
+        feature = !!colname_feature_quo
+      )
+    
+    data_byx_corrs <-
+      widyr::pairwise_cor(
+        data_byx_joined_renamed,
+        word,
+        feature,
+        sort = TRUE,
+        upper = FALSE
+      )
+    
+    data_byx_corrs_ranked <-
+      dplyr::mutate(data_byx_corrs, rank = dplyr::row_number(dplyr::desc(correlation)))
+    
+    data_byx_corrs_top <-
+      dplyr::filter(data_byx_corrs_ranked, rank <= num_top_corrs)
+    
+    if(return_both | (return_words & return_corrs)) {
+      out <- list(words = data_byx_cnt_top, corrs = data_byx_corrs_top)
+    } else if (return_corrs) {
+      out <- data_byx_corrs_top
+    } else if (return_words) {
+      out <- data_byx_cnt_top
+    }
+    out
+  }
+```
+
+```{r}
+num_top_ngrams <- 50
+num_top_corrs <- 50
+
+unigrams_byx_corrs <-
+  compute_ngrams_byx_corrs(
+    data_tidy_unigrams,
+    num_top_ngrams = num_top_ngrams,
+    num_top_corrs = num_top_corrs,
+    colname_word = "word",
+    colname_feature = "timestamp"
+  )
+```
+
+```{r}
+compute_ngrams_byx_corrs_network <-
+  function(data = NULL,
+           colname_word = NULL,
+           colname_feature = NULL,
+           num_top_ngrams = 50,
+           num_top_corrs = 50) {
+  ngrams_byx_corrs <-
+    compute_ngrams_byx_corrs(
+      data = data,
+      colname_word = colname_word,
+      colname_feature = colname_feature,
+      num_top_ngrams = num_top_ngrams,
+      num_top_corrs = num_top_corrs,
+      return_both = TRUE
+    )
+  words <- ngrams_byx_corrs$words
+  corrs <- ngrams_byx_corrs$corrs
+  out <- igraph::graph_from_data_frame(d = corrs, vertices = words, directed = TRUE)
+  out
+}
+
+```
+
+```{r}
+visualize_ngrams_byx_corrs <-
+  function(data = NULL,
+           resize_points = TRUE,
+           colname_size_point = "n", # This is the directly passed from the compute_ngrams_byx_corrs_network() function.
+           add_labels = TRUE,
+           colname_label = "name",  # This is the directly passed from the compute_ngrams_byx_corrs_network() function.
+           color_point = "grey50",
+           shape_point = 21,
+           lab_feature,
+           seed = 42) {
+    if(is.null(data)) {
+      stop("`data` cannot be NULL.", call. = FALSE)
+    }
+
+    set.seed(seed)
+    viz <-
+      data %>%
+      ggraph::ggraph(layout = "fr") +
+      ggraph::geom_edge_link(edge_width = 1)
+    
+    if (resize_points) {
+      viz <-
+        viz +
+        ggraph::geom_node_point(
+          ggplot2::aes_string(size = colname_size_point),
+          fill = color_point,
+          shape = shape_point
+        )
+    } else {
+      viz <-
+        viz +
+        ggraph::geom_node_point(fill = color_point, shape = shape_point)
+    }
+
+    if (add_labels) {
+      viz <-
+        viz +
+        ggraph::geom_node_text(ggplot2::aes_string(label = colname_label), repel = TRUE)
+    }
+    
+    viz <-
+      viz +
+      ggplot2::theme_void() +
+      ggplot2::theme(legend.position = "none") +
+      ggplot2::labs(title = "Network of Pairwise Correlations")
+    
+    if (!missing(lab_feature)) {
+      lab_subtitle <- paste0("within Single ", lab_feature)
+      viz <- viz = labs(subtitle = lab_subtitle)
+    }
+    viz
+  }
+```
+
+```{r}
+viz_unigrams_byx_corrs <-
+  compute_ngrams_byx_corrs_network(
+    data_tidy_unigrams,
+    num_top_ngrams = num_top_ngrams,
+    num_top_corrs = num_top_corrs,
+    colname_word = "word",
+    colname_feature = "timestamp"
+  ) %>% 
+  visualize_ngrams_byx_corrs(
+    resize_points = TRUE,
+    add_labels = TRUE
+  )
+viz_unigrams_byx_corrs
+```
+
+
+### Word Changes Over Time
+
+```{r}
+timefloor <- "year"
+ngram_total_min <- 30
+unigrams_bytime <-
+  data_tidy_unigrams %>%
+  mutate(time_floor = floor_date(timestamp, unit = timefloor)) %>%
+  group_by(time_floor, word) %>% 
+  summarise(n = n()) %>% 
+  ungroup() %>%
+  group_by(time_floor) %>%
+  mutate(time_total = sum(n)) %>%
+  ungroup() %>% 
+  group_by(word) %>%
+  mutate(ngram_total = sum(n)) %>%
+  ungroup() %>%
+  rename(n = n) %>%
+  filter(ngram_total >= ngram_total_min)
+unigrams_bytime
+
+unigrams_bytime_models <- 
+  unigrams_bytime %>% 
+  tidyr::nest(-word) %>% 
+  mutate(
+    models =
+      purrr::map(data, ~ glm(cbind(n, time_total) ~ time_floor, ., family = "binomial"))
+  )
+unigrams_bytime_models
+
+unigrams_bytime_models_slopes <-
+  unigrams_bytime_models %>%
+  tidyr::unnest(purrr::map(models, tidy)) %>%
+  filter(term == "time_floor") %>%
+  mutate(adjusted_p_value = p.adjust(p.value))
+
+num_top_change <- 5
+unigrams_bytime_models_slopes_top <-
+  unigrams_bytime_models_slopes %>% 
+  top_n(num_top_change, -adjusted_p_value)
+  # arrange(adjusted_p_value) %>% 
+  # slice(1:num_top_change)
+unigrams_bytime_models_slopes_top
+
+# Setting more than one guide_legend() to NULL does not work.
+viz_unigrams_change_bytime <-
+  unigrams_bytime %>%
+  inner_join(unigrams_bytime_models_slopes_top, by = c("word")) %>%
+  mutate(pct = n / time_total) %>%
+  mutate(label = if_else(time_floor == max(time_floor), word, NA_character_)) %>%
+  ggplot(aes(x = time_floor, y = pct, color = word)) +
+  geom_line(size = 1.5) +
+  ggrepel::geom_label_repel(aes(label = label), nudge_x = 1, na.rm = TRUE) +
+  # geom_point() +
+  # geom_smooth(method = "loess", se = FALSE) +
+  scale_y_continuous(labels = scales::percent_format()) +
+  viridis::scale_color_viridis(
+  option = "C",
+  discrete = TRUE,
+  begin = 0,
+  end = 0.75
+  ) +
+  temisc::theme_te_b_facet() +
+  theme(legend.position = "none") +
+  labs(x = NULL, y = NULL) +
+  labs(title = "Largest Changes in Word Frequency")
+viz_unigrams_change_bytime
+```
+
+### Term-Frequency Inverse Document Frequency (TF-IDF) 
+
+Perhaps a better way to understand my search behavior is to look at term-frequency
+inverse-document-frequency (TF-IDF). I'll leave the reader to read the details
+in the [_Tidy Text Mining_](https://www.tidytextmining.com/tfidf.html) book, 
+but, in a nutshell, TF-IDF provides a good measure
+of the most "unique" words in a given document compared to other documents. In this context,
+I'll let each distinct year play the role of document.
+
+```{r}
+# References:
+# + https://www.tidytextmining.com/tfidf.html
+# + https://juliasilge.com/blog/sherlock-holmes-stm/
+
+num_top_tfidf <- 10
+data_tfidf <-
+  data_tidy_unigrams %>%
+  count(yyyy, word, sort = TRUE) %>% 
+  tidytext::bind_tf_idf(word, yyyy, n) %>% 
+  group_by(yyyy) %>%
+  # arrange(yyyy, desc(tf_idf)) %>%
+  # slice(1:num_top_tfidf) %>%
+  top_n(num_top_tfidf, tf_idf) %>% 
+  ungroup()
+
+viz_tfidf <-
+  data_tfidf %>%
+  mutate(yyyy = factor(yyyy)) %>% 
+  mutate(word = drlib::reorder_within(word, tf_idf, yyyy)) %>%
+  ggplot(aes(word, tf_idf, fill = yyyy)) +
+  geom_col() +
+  viridis::scale_fill_viridis(option = "C", discrete = TRUE) +
+  facet_wrap(~ yyyy, scales = "free") +
+  drlib::scale_x_reordered() +
+  coord_flip() +
+  temisc::theme_te_b_dx() +
+  theme(legend.position = "none") +
+  theme(axis.text.x = element_blank()) +
+  labs(x = NULL, y = NULL) +
+  labs(title = "Highest TF-IDF Words", subtitle = "By Year")
+viz_tfidf
+
+```
+
+```{r eval = FALSE, include = FALSE}
+# ggsave(viz_tfidf, file = "figs/viz_tfidf.png", units = "in", height = 10, width = 10)
+```
+
+
+### Topic Modeling
+
+Now, I'll try my hand at topic modeling, using the principles laid out in
+[_Tidy Text Mining_](https://www.tidytextmining.com/topicmodeling.html).
+Notably, the book demonstrates the use of the `topicmodels` package, but other
+techniques/packages are certainly valid. For example, Julia Silge
+provides examples of topic modeling using the `stm` package in a
+[a recent blog post exploring _Sherlock Holmes_ text](https://juliasilge.com/blog/sherlock-holmes-stm/).
+
+```{r}
+# References: (for all of the topic modelling)
+# + (https://www.tidytextmining.com/topicmodeling.html)
+# + https://juliasilge.com/blog/sherlock-holmes-stm/
+
+data_dtm <-
+  data_tidy_unigrams %>%
+  count(yyyy, word, sort = TRUE) %>%
+  tidytext::cast_dtm(yyyy, word, n)
+```
+
+```{r eval = FALSE, include = FALSE}
+data_dfm <-
+  data_tidy_unigrams %>%
+  count(yyyy, word, sort = TRUE) %>%
+  tidytext::cast_dfm(yyyy, word, n)
+```
+
+After casting to a ~~`dfm` object (an object class from the `quanteda` package)~~, 
+`dtm` object (a `DocumentTermMatrix`),
+I can use the ~~`stm::stm()`~~ `topicmodels::LDA()` function for
+topic modeling.
+(Warning: This may take a minute or so.) I'm choosing 9 topics because I have
+data for 9 separate years. (Admittedly, this is a somewhat naive approach. Given that
+the start and end of my data does not correspond with the beginning and ends of years,
+perhaps I could slice the data into 12 month intervals. Another approach worth exploring
+would compile it into groups of years corresponding to "phases" in my
+schooling and career.)
+
+```{r eval = FALSE}
+lda_k <- 9
+model_lda <- topicmodels::LDA(data_dtm, k = lda_k, control = list(seed = 42))
+```
+
+```{r eval = FALSE, include = FALSE}
+lda_k <- 9
+model_lda <- stm::stm(data_dfm, K = lda_k, verbose = FALSE, init.type = "Spectral")
+```
+
+```{r include = FALSE}
+# saveRDS(model_lda, file.path("data", "model_stm-k9-yyyy-tony.rds"))
+# model_lda <- readRDS(file.path("data", "model_stm-k9-yyyy-tony.rds"))
+# saveRDS(model_lda, file.path("data", "model_lda-k9-yyyy-tony.rds"))
+model_lda <- readRDS(file.path("data", "model_lda-k9-yyyy-tony.rds"))
+```
+
+Now we can look at the probability of a given word being associated with a given 
+topics (i.e. beta probability).
+Admittedly, the results may seem a bit simply because the topics
+themselves are not "assigned" a word--rather, they are known simply as topic 1, topic 2, etc.
+Nonetheless, looking at which words are most closely associated with each given topic
+allows us to infer what the topic is about.
+
+```{r}
+# TODO: Make a function for this.
+model_lda_betas <- broom:::tidy(model_lda)
+num_top_beta <- 10
+viz_lda_betas <-
+  model_lda_betas %>%
+  group_by(topic) %>%
+  top_n(num_top_beta, beta) %>%
+  # arrange(desc(beta)) %>% 
+  # slice(1:num_top_beta) %>% 
+  ungroup() %>%
+  mutate(topic = paste0("Topic ", topic),
+         term = drlib::reorder_within(term, beta, topic)) %>%
+  mutate(topic = factor(topic)) %>% 
+  ggplot(aes(x = term, y = beta, fill = topic)) +
+  geom_col() +
+  viridis::scale_fill_viridis(option = "C", discrete = TRUE) +
+  facet_wrap(~ topic, scales = "free_y") +
+  coord_flip() +
+  drlib::scale_x_reordered() +
+  temisc::theme_te_b_facet() +
+  theme(legend.position = "none") +
+  theme(axis.text.x = element_blank()) +
+  labs(x = NULL, y = NULL) +
+  labs(title = "Highest Word Probabilities for Each Topic")
+viz_lda_betas
+```
+
+We can use document-to-topic probabilities (gamma probabilities)
+to see how well the model predicts the document (in this case, the year) from which a 
+topic comes. I interpret this as like an extension of the beta probabilities--we go
+from words to topic with the beta values, then from topic to document with the gamma values.
+
+```{r}
+# TODO: Make a function for this.
+model_lda_gammas <-
+  broom::tidy(
+    # document_names = rownames(data_dtm),
+    model_lda, 
+    matrix = "gamma",
+  )
+```
+
+```{r}
+# NOTE: The document-to-topic assignment may not be one-to-one!
+model_lda_gammas_ranked <-
+  model_lda_gammas %>% 
+  group_by(topic) %>%
+  mutate(rank = row_number(desc(gamma))) %>% 
+  arrange(topic, rank) %>% 
+  ungroup()
+model_lda_gammas_ranked %>% filter(rank == 1)
+model_lda_gammas_ranked %>% filter(rank == 2)
+
+model_lda_gammas_ranked %>% 
+  filter(rank <= 2) %>% 
+  select(-document) %>% 
+  tidyr::spread(rank, gamma) %>% 
+  mutate(gamma_diff = `1` -`2`) %>% 
+  arrange(gamma_diff)
+```
+
+```{r}
+model_lda_gammas_preds <-
+  model_lda_gammas %>% 
+  group_by(topic) %>%
+  top_n(1, gamma) %>%
+  mutate(rank = row_number(desc(gamma))) %>% 
+  ungroup() %>%
+  transmute(consensus = document, topic, gamma)
+```
+```{r}
+# NOTE: Manual fix for this data set!
+topic_fix <- 6
+doc_sub <- "2010"
+gamma_replcament <-
+  model_lda_gammas %>% 
+  filter(document == doc_sub, topic == topic_fix ) %>% 
+  pull(gamma)
+model_lda_gammas_preds <-
+  model_lda_gammas_preds %>% 
+  mutate(consensus = ifelse(topic == topic_fix , doc_sub, consensus)) %>% 
+  mutate(gamma = ifelse(topic == topic_fix, gamma_replcament, gamma))
+```
+
+```{r}
+viz_lda_gammas_preds <-
+  model_lda_gammas_preds %>%
+  mutate(topic = paste0("Topic ", topic)) %>% 
+  mutate(topic = factor(topic)) %>% 
+  ggplot(aes(x = topic, y = gamma, color = topic)) +
+  # geom_point() +
+  ggalt::geom_lollipop(aes(x = topic, y = gamma), size = 2, point.size = 4) +
+  viridis::scale_color_viridis(option = "C", discrete = TRUE) +
+  ylim(0, 1) +
+  temisc::theme_te_b() +
+  theme(legend.position = "none") +
+  labs(x = NULL, y = NULL) +
+  labs(title = "Document-to-Topic Probabilities")
+viz_lda_gammas_preds
+```
+
+```{r include = FALSE, eval = FALSE}
+viz_lda_gammas <-
+  model_lda_gammas %>%
+  mutate(topic = paste0("Topic ", topic)) %>% 
+  mutate(topic = factor(topic)) %>% 
+  ggplot(aes(x = gamma, fill = topic)) +
+  geom_histogram(bins = 6) +
+  viridis::scale_fill_viridis(option = "C", discrete = TRUE) +
+  facet_wrap( ~ topic) +
+  temisc::theme_te_b_facet_dx() +
+  theme(legend.position = "none") +
+  labs(x = NULL, y = NULL) +
+  labs(title = "Distribution of Document Probabilities for Each Topic")
+viz_lda_gammas
+```
+
+Finally, it can be insightful to see what the model classifies each individual
+word (as opposed to the topics). In the case that the gamma probabilities are
+innacurate, identifying which words are misclassified can provide us an indication
+of why the model is off.
+
+```{r}
+model_lda_words_preds <- model_lda %>% broom::augment(data_dtm)
+model_lda_words_preds_joined <-
+  model_lda_words_preds %>%
+  inner_join(model_lda_gammas_preds %>% select(-gamma), by = c(".topic" = "topic"))
+
+# NOTE:Can't change size of axis.titles?
+viz_lda_words_preds <-
+  model_lda_words_preds_joined %>%
+  count(document, consensus, wt = count) %>%
+  group_by(document) %>%
+  mutate(pct = n / sum(n)) %>%
+  arrange(document, consensus) %>% 
+  ggplot(aes(x = consensus, y = document, fill = pct)) +
+  geom_tile() +
+  scale_fill_gradient2(high = "red", label = scales::percent_format()) +
+  temisc::theme_te_b() +
+  # hrbrthemes::theme_ipsum() +
+  theme(legend.position = "bottom") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        panel.grid = element_blank()) +
+  labs(x = "Prediction", y = "Actual", fill = "% of assignments") +
+  labs(title = "Prediction Accuracy of Words to Documents")
+viz_lda_words_preds
+```
+
