@@ -435,6 +435,8 @@ filepath_unigrams <- "data/unigrams-tony.rds"
 filepath_bigrams <- "data/bigrams-tony.rds"
 # saveRDS(unigrams, file = filepath_unigrams)
 # saveRDS(bigrams, file = filepath_bigrams)
+# readr::write_csv(unigrams, gsub("\\.rds", ".csv", filepath_unigrams))
+# readr::write_csv(bigrams, gsub("\\.rds", ".csv", filepath_bigrams))
 unigrams <- readRDS(file = filepath_unigrams)
 bigrams <- readRDS(file = filepath_bigrams)
 ```
