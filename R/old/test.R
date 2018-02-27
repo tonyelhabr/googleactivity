@@ -55,13 +55,13 @@ visualize_byx_cnt <-
     #     ggplot2::scale_color_manual(values = color) +
     #     drlib::scale_x_reordered() +
     #     ggplot2::facet_wrap(as.formula(paste0("~", facet_char)), scales = "free") +
-    #     temisc::theme_te_b_facet() +
+    #     teplot::theme_te_b_facet() +
     #     ggplot2::labs(subtitle = paste0("By ", stringr::str_to_title(facet_char)))
     # } else {
     #   viz <-
     #     viz +
     #     ggplot2::scale_color_manual(values = "grey80") +
-    #     temisc::theme_te_b()
+    #     teplot::theme_te_b()
     # }
     # viz <-
     #   viz +

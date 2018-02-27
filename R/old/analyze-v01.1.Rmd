@@ -171,7 +171,7 @@ visualize_bytime <-
         subtitle = lab_subtitle
       )
     viz_theme <-
-      temisc::theme_te_b_facet() +
+      teplot::theme_te_b_facet() +
       theme(panel.grid.major.x = element_blank()) +
       theme(legend.position = "none")
 
@@ -303,7 +303,7 @@ viz_bytime_hh_2 <-
   ) +
   labs(x = NULL, y = NULL) +
   labs(title = "Count Over Time", lab_subtitle = "By Time of Day") +
-  temisc::theme_te_b_dx() +
+  teplot::theme_te_b_dx() +
   theme(legend.position = "none", panel.grid = element_blank()) +
   coord_flip()
 ```
@@ -319,7 +319,7 @@ viz_bytime_hh_wd <-
   facet_wrap( ~ wd, scales = "free") +
   labs(x = NULL, y = NULL) +
   labs(title = "Count Over Time", lab_subtitle = "By Hour of Day and Time of Day") +
-  temisc::theme_te_b_facet_dx() +
+  teplot::theme_te_b_facet_dx() +
   theme(legend.position = "none", panel.grid = element_blank())
 
 # Reference:
@@ -332,7 +332,7 @@ viz_bytime_wd_yyyy <-
   facet_wrap(~name, scales = "free") +
   labs(x = NULL, y = NULL) +
   labs(title = "Count Over Time", lab_subtitle = "By Day of Week and Year") +
-  temisc::theme_te_b_facet_dx() +
+  teplot::theme_te_b_facet_dx() +
   theme(legend.position = "bottom", panel.grid = element_blank())
 
 ```
@@ -581,7 +581,7 @@ visualize_cnt_byx <- function(data = NULL,
       viz <-
         viz +
         ggplot2::scale_color_manual(values = color) +
-        temisc::theme_te_b()
+        teplot::theme_te_b()
     } else {
       viz <-
         viz +
@@ -589,7 +589,7 @@ visualize_cnt_byx <- function(data = NULL,
         ggplot2::scale_color_manual(values = color) +
         drlib::scale_x_reordered() +
         ggplot2::facet_wrap(as.formula(paste0("~", colname_facet)), scales = "free") +
-        temisc::theme_te_b_facet() +
+        teplot::theme_te_b_facet() +
         ggplot2::labs(subtitle = paste0("By ", stringr::str_to_title(colname_facet)))
     }
     viz <-
@@ -679,7 +679,7 @@ viz_bigrams_freqs_byx <-
   scale_y_discrete(position = "right") +
   scale_color_manual(values = params$color_main) +
   scale_size_area(max_size = 25) +
-  temisc::theme_te_b() +
+  teplot::theme_te_b() +
   theme(legend.position = "none") +
   coord_flip() +
   labs(x = NULL, y = NULL) +
@@ -927,7 +927,7 @@ viz_unigrams_change_bytime <-
   begin = 0,
   end = 0.75
   ) +
-  temisc::theme_te_b_facet() +
+  teplot::theme_te_b_facet() +
   theme(legend.position = "none") +
   labs(x = NULL, y = NULL) +
   labs(title = "Largest Changes in Word Frequency")
@@ -969,7 +969,7 @@ viz_tfidf <-
   facet_wrap(~ yyyy, scales = "free") +
   drlib::scale_x_reordered() +
   coord_flip() +
-  temisc::theme_te_b_dx() +
+  teplot::theme_te_b_dx() +
   theme(legend.position = "none") +
   theme(axis.text.x = element_blank()) +
   labs(x = NULL, y = NULL) +
@@ -1065,7 +1065,7 @@ viz_lda_betas <-
   facet_wrap(~ topic, scales = "free_y") +
   coord_flip() +
   drlib::scale_x_reordered() +
-  temisc::theme_te_b_facet() +
+  teplot::theme_te_b_facet() +
   theme(legend.position = "none") +
   theme(axis.text.x = element_blank()) +
   labs(x = NULL, y = NULL) +
@@ -1140,7 +1140,7 @@ viz_lda_gammas_preds <-
   ggalt::geom_lollipop(aes(x = topic, y = gamma), size = 2, point.size = 4) +
   viridis::scale_color_viridis(option = "C", discrete = TRUE) +
   ylim(0, 1) +
-  temisc::theme_te_b() +
+  teplot::theme_te_b() +
   theme(legend.position = "none") +
   labs(x = NULL, y = NULL) +
   labs(title = "Document-to-Topic Probabilities")
@@ -1156,7 +1156,7 @@ viz_lda_gammas <-
   geom_histogram(bins = 6) +
   viridis::scale_fill_viridis(option = "C", discrete = TRUE) +
   facet_wrap( ~ topic) +
-  temisc::theme_te_b_facet_dx() +
+  teplot::theme_te_b_facet_dx() +
   theme(legend.position = "none") +
   labs(x = NULL, y = NULL) +
   labs(title = "Distribution of Document Probabilities for Each Topic")
@@ -1184,7 +1184,7 @@ viz_lda_words_preds <-
   ggplot(aes(x = consensus, y = document, fill = pct)) +
   geom_tile() +
   scale_fill_gradient2(high = "red", label = scales::percent_format()) +
-  temisc::theme_te_b() +
+  teplot::theme_te_b() +
   # hrbrthemes::theme_ipsum() +
   theme(legend.position = "bottom") +
   theme(axis.text.x = element_text(angle = 90, hjust = 1),

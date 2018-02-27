@@ -84,7 +84,7 @@ viz_lda_betas <-
   facet_wrap(~ topic, scales = "free_y") +
   coord_flip() +
   drlib::scale_x_reordered() +
-  temisc::theme_te_a_facet() +
+  teplot::theme_te_a_facet() +
   theme(legend.position = "none") +
   theme(axis.text.x = element_blank()) +
   labs(x = NULL, y = NULL) +
@@ -190,7 +190,7 @@ ggplot(aes(x = topic, y = gamma, color = topic)) +
 ggalt::geom_lollipop(aes(x = topic, y = gamma), size = 2, point.size = 4) +
 scale_color_func() +
 ylim(0, 1) +
-temisc::theme_te_a() +
+teplot::theme_te_a() +
 theme(legend.position = "none") +
 labs(x = NULL, y = NULL) +
 labs(title = "Document-to-Topic Probabilities")
@@ -209,7 +209,7 @@ ggplot(aes(x = gamma, fill = topic)) +
 geom_histogram(bins = 6) +
 scale_fill_func() +
 facet_wrap( ~ topic) +
-temisc::theme_te_a_facet_dx() +
+teplot::theme_te_a_facet_dx() +
 theme(legend.position = "none") +
 labs(x = NULL, y = NULL) +
 labs(title = "Distribution of Document Probabilities for Each Topic")
@@ -240,7 +240,7 @@ arrange(document, consensus) %>%
 ggplot(aes(x = consensus, y = document, fill = pct)) +
 geom_tile() +
 scale_fill_gradient2(high = "red", label = scales::percent_format()) +
-temisc::theme_te_a() +
+teplot::theme_te_a() +
 theme(legend.position = "bottom") +
 theme(axis.text.x = element_text(angle = 90, hjust = 1), panel.grid = element_blank()) +
 labs(x = "Prediction", y = "Actual", fill = "% of assignments") +

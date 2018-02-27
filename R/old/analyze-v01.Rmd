@@ -158,7 +158,7 @@ visualize_bytime <-
         subtitle = lab_subtitle
       )
     viz_theme <-
-      temisc::theme_te_b_facet() +
+      teplot::theme_te_b_facet() +
       theme(panel.grid.major.x = element_blank()) +
       # theme(legend.position = "bottom", legend.title = element_blank())
       theme(legend.position = "none")
@@ -240,7 +240,7 @@ viz_bytime_hh_2 <-
              color = "gray",
              size = 0.1) +
   labs(x = NULL, y = NULL, title = "Count Over Time", lab_subtitle = "By Time of Day") +
-  temisc::theme_te_b_dx() +
+  teplot::theme_te_b_dx() +
   theme(legend.position = "none", panel.grid = element_blank()) +
   coord_flip()
 
@@ -252,7 +252,7 @@ viz_bytime_hh_wday <-
   scale_fill_manual(values = params$color_main) +
   facet_wrap( ~ wday, scales = "free") +
   labs(x = NULL, y = NULL, title = "Count Over Time", lab_subtitle = "By Hour of Day and Time of Day") +
-  temisc::theme_te_b_facet_dx() +
+  teplot::theme_te_b_facet_dx() +
   theme(legend.position = "none", panel.grid = element_blank())
 
 viz_bytime_wday_yyyy <-
@@ -263,7 +263,7 @@ viz_bytime_wday_yyyy <-
   facet_wrap(~name, scales = "free") +
   labs(x = NULL, y = NULL, title = "Count Over Time", lab_subtitle = "By Day of Week and Year") +
   # viridis::scale_fill_viridis(discrete = FALSE) +
-  temisc::theme_te_b_facet_dx() +
+  teplot::theme_te_b_facet_dx() +
   theme(legend.position = "bottom", panel.grid = element_blank())
 
 ```
@@ -512,7 +512,7 @@ viz_bigrams_byname_freqs <-
   scale_y_discrete(position = "right") +
   scale_color_manual(values = params$color_main) +
   scale_size_area(max_size = 25) +
-  temisc::theme_te_b() +
+  teplot::theme_te_b() +
   theme(legend.position = "none") +
   coord_flip() +
   labs(x = NULL, y = NULL) +
@@ -546,7 +546,7 @@ viz_tfidf <-
   facet_wrap(~ year, scales = "free") +
   drlib::scale_x_reordered() +
   coord_flip() +
-  temisc::theme_te_b_dx() +
+  teplot::theme_te_b_dx() +
   theme(legend.position = "none") +
   theme(axis.text.x = element_blank()) +
   labs(x = NULL, y = NULL) +
@@ -604,7 +604,7 @@ viz_stm_betas <-
   facet_wrap(~ topic, scales = "free_y") +
   coord_flip() +
   drlib::scale_x_reordered() +
-  temisc::theme_te_b_facet() +
+  teplot::theme_te_b_facet() +
   theme(legend.position = "none") +
   theme(axis.text.x = element_blank()) +
   labs(x = NULL, y = NULL) +
@@ -627,7 +627,7 @@ viz_stm_gammas <-
   geom_histogram(bins = 6) +
   viridis::scale_fill_viridis(discrete = TRUE) +
   facet_wrap( ~ topic) +
-  temisc::theme_te_b_facet_dx() +
+  teplot::theme_te_b_facet_dx() +
   theme(legend.position = "none") +
   labs(x = NULL, y = NULL) +
   labs(title = "Distribution of Document Probabilities for Each Topic")

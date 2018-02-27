@@ -72,8 +72,8 @@ library("drlib")
 library("igraph")
 library("ggraph")
 # library("topicmodels")
-# devtools::install_github("tonyelhabr/temisc")
-library("temisc") # Personal package.
+# devtools::install_github("tonyelhabr/teplot")
+library("teplot")
 ```
 
 Next, I create a `params` list in order to emulate what one might 
@@ -224,7 +224,7 @@ visualize_time <-
         subtitle = lab_subtitle
       )
     viz_theme <-
-      temisc::theme_te_a() +
+      teplot::theme_te() +
       theme(panel.grid.major.x = element_blank()) +
       theme(legend.position = "none")
 
@@ -355,7 +355,7 @@ viz_time_hh_2 <-
   ) +
   labs(x = NULL, y = NULL) +
   labs(title = "Count Over Time", lab_subtitle = "By Time of Day") +
-  temisc::theme_te_a_dx() +
+  teplot::theme_te_dx() +
   theme(legend.position = "none", panel.grid = element_blank()) +
   coord_flip()
 viz_time_hh_2
@@ -369,7 +369,7 @@ viz_time_hh_wd <-
   facet_wrap( ~ wd, scales = "free") +
   labs(x = NULL, y = NULL) +
   labs(title = "Count Over Time", lab_subtitle = "By Hour of Day and Time of Day") +
-  temisc::theme_te_a_facet_dx() +
+  teplot::theme_te_facet_dx() +
   theme(legend.position = "none", panel.grid = element_blank())
 viz_time_hh_wd
 # Reference:
@@ -382,7 +382,7 @@ viz_time_wd_yyyy <-
   facet_wrap(~name, scales = "free") +
   labs(x = NULL, y = NULL) +
   labs(title = "Count Over Time", lab_subtitle = "By Day of Week and Year") +
-  temisc::theme_te_a_facet_dx() +
+  teplot::theme_te_facet_dx() +
   theme(legend.position = "bottom", panel.grid = element_blank())
 viz_time_wd_yyyy
 ```
@@ -455,7 +455,7 @@ visualize_cnts <- function(data, color = "grey50", num_top = 20) {
     ggplot(aes(x = word, y = n)) +
     ggalt::geom_lollipop(size = 2, point.size = 4, color = color) +
     coord_flip() +
-    temisc::theme_te_a() +
+    teplot::theme_te() +
     labs(x = NULL, y = NULL) +
     labs(title = "Most Common Words") +
     theme(legend.position = "none") +
@@ -673,7 +673,7 @@ viz_corrs_network <-
   ggraph::geom_edge_link(edge_width = 1) +
   ggraph::geom_node_point(aes(size = n), fill = "grey50", shape = 21) +
   ggraph::geom_node_text(ggplot2::aes_string(label = "name"), repel = TRUE) +
-  theme_te_a() +
+  theme_te() +
   theme(line = element_blank(), rect = element_blank(), axis.text = element_blank(), axis.ticks = element_blank()) +
   theme(legend.position = "none") +
   labs(x = NULL, y = NULL) +
@@ -764,7 +764,7 @@ viz_unigrams_change_bytime <-
   ggrepel::geom_label_repel(aes(label = label), nudge_x = 1, na.rm = TRUE) +
   scale_y_continuous(labels = scales::percent_format()) +
   scale_color_func() +
-  temisc::theme_te_a() +
+  teplot::theme_te() +
   theme(legend.position = "none") +
   labs(x = NULL, y = NULL) +
   labs(title = "Largest Changes in Word Frequency")
@@ -833,7 +833,7 @@ viz_tfidf <-
   facet_wrap(~ yyyy, scales = "free") +
   drlib::scale_x_reordered() +
   coord_flip() +
-  temisc::theme_te_a_dx() +
+  teplot::theme_te_dx() +
   theme(legend.position = "none") +
   theme(axis.text.x = element_blank()) +
   labs(x = NULL, y = NULL) +
